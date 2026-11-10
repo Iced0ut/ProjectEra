@@ -4,12 +4,13 @@ Original top-down city action sandbox **inspired by** public GraalOnline Era sys
 
 ## Highlights
 
+- **Full dual-island city**: Northridge + Southridge Bridge + Southridge Island (160×220 tiles, 30+ districts)
+- Districts include Start Park, Mercy Beach/West/East, Airport, Snow Resort, Spar Complex, Bank, Auction, Fashion Mall, Gun Point, and gang bases (GZ, Tachi, BH, BBZ, Lethal, Mafia / Pirate, Guerre, Neo)
+- Subway warp pads between islands; walkable bridge across the channel
 - **Weapon catalog** with melee, pistols, rifles, SMGs, LMGs, shotguns, snipers, launchers, staffs, exotics, grenades, and a shield
 - **On-hit effects**: burn, poison, shock, slow, stun, lifesteal, knockback, heal, explode, guard DR
-- **Abilities (Q)**: dash, roll, heal, shield, mode switch, rage, blink, spray/burst, speed boost, alt-heal
-- **Populated city**: named NPC shops/guides, ambient citizens, spar bots, street rivals, gang enforcers, beach crabs, police patrols, arena bots, training dummies
-- **Beach digging**: buy shovels (50g), dig sand for Trochus / Aerolata / Sand Dollar / Scallop / Starfish, crab dig spawns, crab shells (6g) at Wandi's, sell at Shell Shack
-- Houses, gangs, jobs, cars/mounts stubs, morphs, local custom skin upload (U)
+- **Beach digging**: Trochus and shell types, shovel shops, crab spawns, Wandi crab shells
+- Populated with NPCs, citizens, and bots across both islands
 
 ## Play
 

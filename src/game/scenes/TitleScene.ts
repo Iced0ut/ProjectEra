@@ -31,9 +31,9 @@ export class TitleScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     this.add
-      .text(width / 2, height * 0.28, 'City action sandbox — original demo district', {
+      .text(width / 2, height * 0.28, 'Northridge · Bridge · Southridge — full city sandbox', {
         fontFamily: 'VT323, monospace',
-        fontSize: '28px',
+        fontSize: '26px',
         color: '#8aa0c0',
       })
       .setOrigin(0.5);

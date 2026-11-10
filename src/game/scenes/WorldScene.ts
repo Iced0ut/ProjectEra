@@ -43,8 +43,9 @@ import {
   type GameState,
   type JobId,
 } from '../state';
-import { createWorld, tileAt, type WorldData } from '../world';
+import { createWorld, districtNameAt, tileAt, type WorldData } from '../world';
 import { playMusic, playSfx } from '../audio';
+import { DISTRICTS } from '../content/districts';
 
 interface BotSprite extends Phaser.Physics.Arcade.Sprite {
   bot: BotDef;
@@ -185,10 +186,14 @@ export class WorldScene extends Phaser.Scene {
       'W,A,S,D,E,Q,SHIFT,SPACE,ONE,TWO,C,I,H,G,M,B,V,R,U,TAB',
     ) as Record<string, Phaser.Input.Keyboard.Key>;
 
+    this.drawDistrictLabels();
+    this.drawWarpPads();
+
     playMusic(this, 'theme_city', 0.26);
     this.game.events.emit('era-state', this.state);
-    this.pushChat(`District online: ${CITY_NPCS.length} NPCs, ${AMBIENT_CITIZEN_SPOTS.length} citizens, ${createCityBots().length} bots.`);
-    this.pushChat('Shops: guns, melee, exotic. Try effects on spar bots / dummies.');
+    this.pushChat(`Northridge + Southridge online (${MAP_W}x${MAP_H} tiles, ${DISTRICTS.length} districts).`);
+    this.pushChat(`${CITY_NPCS.length} NPCs · ${AMBIENT_CITIZEN_SPOTS.length} citizens · ${createCityBots().length} bots.`);
+    this.pushChat('Cross the bridge south of harbour, or E on Subway Pad N/S to warp.');
   }
 
   update(time: number, delta: number): void {
@@ -206,7 +211,8 @@ export class WorldScene extends Phaser.Scene {
     const cell = tileAt(this.world, this.player.x, this.player.y);
     if (cell) {
       const pk = cell.noPk ? 'NO-PK' : 'PK';
-      this.zoneText.setText(`${cell.zone.toUpperCase()}  [${pk}]`);
+      const place = districtNameAt(this.world, this.player.x, this.player.y);
+      this.zoneText.setText(`${cell.region.toUpperCase()} · ${place}  [${pk}]`);
     }
     this.interactHint.setText(this.nearInteractLabel());
     const wpn = currentWeapon(this.state);
@@ -293,12 +299,53 @@ export class WorldScene extends Phaser.Scene {
       safe: 'tile-safe',
       spar: 'tile-spar',
       gang: 'tile-gang',
+      snow: 'tile-snow',
+      bridge: 'tile-bridge',
+      mine: 'tile-mine',
     } as const;
+
+    // One render texture instead of tens of thousands of sprites
+    const rt = this.add.renderTexture(0, 0, MAP_W * TILE, MAP_H * TILE).setOrigin(0, 0).setDepth(0);
     for (let y = 0; y < MAP_H; y++) {
       for (let x = 0; x < MAP_W; x++) {
         const cell = this.world.cells[y][x];
-        this.add.image(x * TILE + 16, y * TILE + 16, keyFor[cell.tile]).setDepth(0);
+        rt.draw(keyFor[cell.tile], x * TILE, y * TILE);
       }
+    }
+  }
+
+  private drawDistrictLabels(): void {
+    for (const label of this.world.labels) {
+      this.add
+        .text(label.x, label.y, label.text, {
+          fontFamily: 'VT323, monospace',
+          fontSize: label.text.includes('RIDGE') ? '28px' : '16px',
+          color: label.color,
+          stroke: '#000000',
+          strokeThickness: 4,
+        })
+        .setOrigin(0.5, 0)
+        .setDepth(5)
+        .setAlpha(0.85);
+    }
+  }
+
+  private drawWarpPads(): void {
+    for (const pad of this.world.warpPads) {
+      const cx = pad.x * TILE;
+      const cy = pad.y * TILE;
+      this.add.circle(cx, cy, 14, 0x4aa3ff, 0.45).setDepth(6);
+      this.add.circle(cx, cy, 8, 0x88cfff, 0.8).setDepth(7);
+      this.add
+        .text(cx, cy - 22, pad.label, {
+          fontFamily: 'VT323, monospace',
+          fontSize: '14px',
+          color: '#cfe0ff',
+          stroke: '#000',
+          strokeThickness: 3,
+        })
+        .setOrigin(0.5)
+        .setDepth(8);
     }
   }
 
@@ -741,17 +788,19 @@ export class WorldScene extends Phaser.Scene {
     if (npc) return `E — ${npc.name} (${npc.role})`;
     const cell = tileAt(this.world, this.player.x, this.player.y);
     if (!cell) return '';
-    if (cell.zone === 'beach' || cell.tile === 'sand') {
+    if (cell.tile === 'sand' || cell.zone === 'mercy_beach' || cell.zone === 'south_beach') {
       if (!this.state.shovelCount && this.state.shovelUses <= 0) {
-        return 'Buy a shovel at Isra/Bell Shell Shack (50g)';
+        return 'Buy a shovel at Shell Shack (50g) — Mercy Beach or Southridge';
       }
-      if (!this.state.diggingEquipped) return 'E at Shell Shack to equip shovel, then dig sand';
+      if (!this.state.diggingEquipped) return 'E at Shell Shack → equip, then dig sand';
       return `E — dig sand (${this.state.shovelUses} uses · Trochus common)`;
     }
-    if (cell.zone === 'jobs') return 'E — city job';
-    if (cell.zone === 'spar') return 'Fight spar bots · Q ability';
-    if (cell.zone === 'gangbase') return 'G gang · enforcers patrol';
-    return 'E talk · TAB weapons · 2 cycle · B bots · V ride · U skin';
+    if (cell.zone === 'spar_complex') return 'Fight spar bots · Q ability';
+    if (cell.zone === 'south_mines') return 'Mine pests · Job Foreman nearby';
+    if (this.world.warpPads.some((p) => Phaser.Math.Distance.Between(this.player.x, this.player.y, p.x * TILE, p.y * TILE) < 40)) {
+      return 'E — ride subway / shuttle warp';
+    }
+    return 'E talk · Bridge south of harbour · Subway pads · TAB weapons';
   }
 
   private nearestNpc(): NpcDef | null {
@@ -778,19 +827,44 @@ export class WorldScene extends Phaser.Scene {
       else if (npc.role === 'shop_exotic') this.openWeaponShop('exotic');
       else if (npc.role === 'shop_cars') this.buyCar();
       else if (npc.role === 'shop_fashion' || npc.role === 'shop_hats') this.fashionShop(npc.role);
-      else if (npc.role === 'shell_shop') this.shellShopMenu();
+      else       if (npc.role === 'shell_shop') this.shellShopMenu();
       else if (npc.role === 'crab_shack') this.crabShackMenu();
+      else if (npc.role === 'warp') this.useNearestWarp();
       else if (npc.role === 'job') this.doRandomJob();
       else if (npc.role === 'pizza') this.doJob('pizza', 'pizza', 10, 15);
       else if (npc.role === 'mail') this.doJob('mail', 'mail', 9, 14);
       else if (npc.role === 'gang') this.gangMenu();
       return;
     }
+
+    // Warp pads without needing exact NPC overlap
+    if (this.tryWarpPad()) return;
     const cell = tileAt(this.world, this.player.x, this.player.y);
     if (!cell) return;
-    if (cell.zone === 'beach' || cell.tile === 'sand') this.digBeach();
-    else if (cell.zone === 'jobs') this.doRandomJob();
-    else if (cell.zone === 'house') this.houseMenu();
+    if (cell.tile === 'sand' || cell.zone === 'mercy_beach' || cell.zone === 'south_beach') this.digBeach();
+    else if (cell.zone === 'south_mines' || cell.zone === 'gun_row') this.doRandomJob();
+    else if (cell.zone === 'start_park' || cell.zone === 'downtown') {
+      /* plaza - no default job */
+    }
+  }
+
+  private useNearestWarp(): void {
+    this.tryWarpPad();
+  }
+
+  private tryWarpPad(): boolean {
+    for (const pad of this.world.warpPads) {
+      const d = Phaser.Math.Distance.Between(this.player.x, this.player.y, pad.x * TILE, pad.y * TILE);
+      if (d < 40) {
+        this.player.setPosition(pad.toX * TILE, pad.toY * TILE);
+        playSfx(this, 'dash');
+        this.pushChat(`Warped: ${pad.label}`);
+        const ach = unlockAchievement(this.state, 'bridge-hopper', 'Island Hopper');
+        if (ach) this.pushChat(ach);
+        return true;
+      }
+    }
+    return false;
   }
 
   private shellShopMenu(): void {
@@ -936,8 +1010,8 @@ export class WorldScene extends Phaser.Scene {
     }
 
     const cell = tileAt(this.world, this.player.x, this.player.y);
-    if (!cell || (cell.tile !== 'sand' && cell.zone !== 'beach')) {
-      this.pushChat('Dig on beach sand only.');
+    if (!cell || (cell.tile !== 'sand' && cell.zone !== 'mercy_beach' && cell.zone !== 'south_beach')) {
+      this.pushChat('Dig on beach sand only (Mercy Beach or Southridge Beach).');
       return;
     }
 

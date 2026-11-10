@@ -1,4 +1,5 @@
 import { MAP_H, MAP_W, TILE } from './config';
+import { DISTRICTS, districtAt, type DistrictId } from './content/districts';
 
 export type TileKind =
   | 'grass'
@@ -10,15 +11,19 @@ export type TileKind =
   | 'pk'
   | 'safe'
   | 'spar'
-  | 'gang';
+  | 'gang'
+  | 'snow'
+  | 'bridge'
+  | 'mine';
 
-export type ZoneId = 'downtown' | 'beach' | 'spar' | 'gangbase' | 'park' | 'house' | 'jobs';
+export type ZoneId = DistrictId | 'wilderness';
 
 export interface WorldCell {
   tile: TileKind;
   blocked: boolean;
   zone: ZoneId;
   noPk: boolean;
+  region: 'northridge' | 'southridge' | 'channel';
 }
 
 export interface WorldObjectSpec {
@@ -28,27 +33,21 @@ export interface WorldObjectSpec {
   label?: string;
 }
 
-export interface NpcSpec {
+export interface WorldLabel {
   x: number;
   y: number;
-  name: string;
-  role: 'shop' | 'job' | 'gang' | 'spar' | 'guide';
-  lines: string[];
-}
-
-export interface EnemySpec {
-  x: number;
-  y: number;
+  text: string;
+  color: string;
 }
 
 export interface WorldData {
   cells: WorldCell[][];
   objects: WorldObjectSpec[];
-  npcs: NpcSpec[];
-  enemies: EnemySpec[];
+  labels: WorldLabel[];
   spawn: { x: number; y: number };
   mailDrop: { x: number; y: number };
   pizzaStation: { x: number; y: number };
+  warpPads: { x: number; y: number; label: string; toX: number; toY: number }[];
 }
 
 function fillRect(
@@ -59,14 +58,36 @@ function fillRect(
   h: number,
   tile: TileKind,
   zone: ZoneId,
-  blocked = false,
-  noPk = false,
+  opts: { blocked?: boolean; noPk?: boolean; region?: WorldCell['region'] } = {},
 ) {
   for (let y = y0; y < y0 + h; y++) {
     for (let x = x0; x < x0 + w; x++) {
       if (x < 0 || y < 0 || x >= MAP_W || y >= MAP_H) continue;
-      cells[y][x] = { tile, blocked, zone, noPk };
+      const region = opts.region ?? (y < 118 ? 'northridge' : y < 134 ? 'channel' : 'southridge');
+      cells[y][x] = {
+        tile,
+        blocked: !!opts.blocked,
+        zone,
+        noPk: !!opts.noPk,
+        region,
+      };
     }
+  }
+}
+
+function paintDistrict(cells: WorldCell[][], id: DistrictId, tile: TileKind, extras: { blocked?: boolean } = {}) {
+  const d = DISTRICTS.find((x) => x.id === id);
+  if (!d) return;
+  fillRect(cells, d.x, d.y, d.w, d.h, tile, id, {
+    noPk: !!d.noPk && !d.gangBase,
+    blocked: extras.blocked,
+    region: d.region === 'channel' ? 'channel' : d.region,
+  });
+  if (d.gangBase) {
+    fillRect(cells, d.x + 2, d.y + 2, Math.max(4, d.w - 4), Math.max(4, d.h - 4), 'pk', id, {
+      region: d.region === 'channel' ? 'channel' : d.region,
+    });
+    fillRect(cells, d.x, d.y, d.w, 2, 'gang', id, { region: d.region === 'channel' ? 'channel' : d.region });
   }
 }
 
@@ -75,126 +96,169 @@ export function createWorld(): WorldData {
   for (let y = 0; y < MAP_H; y++) {
     cells[y] = [];
     for (let x = 0; x < MAP_W; x++) {
-      cells[y][x] = { tile: 'grass', blocked: false, zone: 'park', noPk: false };
+      const region = y < 118 ? 'northridge' : y < 134 ? 'channel' : 'southridge';
+      // Default: ocean everywhere, then stamp landmasses
+      cells[y][x] = { tile: 'water', blocked: true, zone: 'wilderness', noPk: true, region };
     }
   }
 
-  // Downtown safe plaza
-  fillRect(cells, 24, 18, 28, 22, 'safe', 'downtown', false, true);
-  fillRect(cells, 28, 20, 20, 16, 'sidewalk', 'downtown', false, true);
-  fillRect(cells, 34, 22, 8, 12, 'path', 'downtown', false, true);
+  // ---- Northridge landmass ----
+  fillRect(cells, 4, 4, 152, 112, 'grass', 'parkland', { region: 'northridge' });
 
-  // Roads
-  fillRect(cells, 0, 28, MAP_W, 4, 'road', 'downtown', false, false);
-  fillRect(cells, 38, 0, 4, MAP_H, 'road', 'downtown', false, false);
+  // Major roads (Northridge grid)
+  fillRect(cells, 4, 66, 152, 4, 'road', 'downtown', { region: 'northridge' });
+  fillRect(cells, 4, 90, 152, 3, 'road', 'harbour', { region: 'northridge' });
+  fillRect(cells, 76, 4, 4, 112, 'road', 'downtown', { region: 'northridge' });
+  fillRect(cells, 40, 4, 3, 112, 'road', 'mercy_west', { region: 'northridge' });
+  fillRect(cells, 116, 4, 3, 112, 'road', 'mercy_east', { region: 'northridge' });
 
-  // Beach / dig zone
-  fillRect(cells, 0, 44, 26, 16, 'sand', 'beach', false, true);
-  fillRect(cells, 0, 52, 26, 8, 'water', 'beach', true, true);
+  // District paints
+  paintDistrict(cells, 'parkland', 'grass');
+  paintDistrict(cells, 'airport', 'sidewalk');
+  paintDistrict(cells, 'snow_resort', 'snow');
+  paintDistrict(cells, 'water_park', 'path');
+  paintDistrict(cells, 'power_plant', 'sidewalk');
+  paintDistrict(cells, 'skate_park', 'path');
+  paintDistrict(cells, 'mafia', 'gang');
+  paintDistrict(cells, 'lethal', 'gang');
+  paintDistrict(cells, 'event_house', 'safe');
+  paintDistrict(cells, 'spar_complex', 'spar');
+  paintDistrict(cells, 'tachi', 'gang');
+  paintDistrict(cells, 'hotel_row', 'sidewalk');
+  paintDistrict(cells, 'fashion_mall', 'sidewalk');
+  paintDistrict(cells, 'gz', 'gang');
+  paintDistrict(cells, 'gun_row', 'path');
+  paintDistrict(cells, 'car_row', 'path');
+  paintDistrict(cells, 'downtown', 'safe');
+  paintDistrict(cells, 'start_park', 'safe');
+  fillRect(cells, 72, 74, 16, 10, 'path', 'start_park', { noPk: true, region: 'northridge' });
+  paintDistrict(cells, 'auction', 'safe');
+  paintDistrict(cells, 'bank', 'gang');
+  paintDistrict(cells, 'mercy_west', 'safe');
+  paintDistrict(cells, 'mercy_east', 'safe');
+  paintDistrict(cells, 'blackholst', 'gang');
+  paintDistrict(cells, 'bbz', 'gang');
+  paintDistrict(cells, 'subway', 'path');
+  paintDistrict(cells, 'harbour', 'path');
+  paintDistrict(cells, 'mercy_beach', 'sand');
+  // Beach water edge
+  fillRect(cells, 8, 112, 40, 4, 'water', 'mercy_beach', { blocked: true, noPk: true, region: 'northridge' });
 
-  // Spar arena
-  fillRect(cells, 58, 8, 18, 14, 'spar', 'spar', false, false);
+  // ---- Channel / bridge ----
+  fillRect(cells, 0, 116, MAP_W, 18, 'water', 'bridge', { blocked: true, noPk: true, region: 'channel' });
+  // Bridge span
+  fillRect(cells, 74, 116, 12, 18, 'bridge', 'bridge', { noPk: true, region: 'channel' });
+  fillRect(cells, 76, 116, 8, 18, 'road', 'bridge', { noPk: true, region: 'channel' });
 
-  // Gang base (PK)
-  fillRect(cells, 58, 36, 18, 16, 'gang', 'gangbase', false, false);
-  fillRect(cells, 60, 38, 14, 12, 'pk', 'gangbase', false, false);
+  // ---- Southridge island ----
+  fillRect(cells, 18, 134, 124, 78, 'grass', 'southridge', { region: 'southridge' });
+  // South roads
+  fillRect(cells, 18, 158, 124, 3, 'road', 'southridge', { region: 'southridge' });
+  fillRect(cells, 78, 134, 3, 78, 'road', 'southridge', { region: 'southridge' });
 
-  // Job strip
-  fillRect(cells, 8, 8, 18, 12, 'path', 'jobs', false, true);
+  paintDistrict(cells, 'southridge', 'safe');
+  paintDistrict(cells, 'south_hospital', 'safe');
+  paintDistrict(cells, 'south_mines', 'mine');
+  paintDistrict(cells, 'pirate_zone', 'gang');
+  paintDistrict(cells, 'guerre', 'gang');
+  paintDistrict(cells, 'neo', 'gang');
+  paintDistrict(cells, 'south_beach', 'sand');
+  paintDistrict(cells, 'cave_coast', 'path');
+  fillRect(cells, 55, 198, 40, 8, 'water', 'south_beach', { blocked: true, noPk: true, region: 'southridge' });
 
-  // Player house lot
-  fillRect(cells, 10, 32, 12, 10, 'safe', 'house', false, true);
+  // Re-stamp bridge ends onto land
+  fillRect(cells, 74, 110, 12, 8, 'road', 'harbour', { noPk: true, region: 'northridge' });
+  fillRect(cells, 74, 134, 12, 8, 'road', 'southridge', { noPk: true, region: 'southridge' });
 
-  const objects: WorldObjectSpec[] = [
-    { type: 'shop', x: 30 * TILE, y: 20 * TILE, label: 'Weapon Shop' },
-    { type: 'shop', x: 44 * TILE, y: 20 * TILE, label: 'Job Board' },
-    { type: 'building', x: 30 * TILE, y: 30 * TILE, label: 'Speedy Pizza' },
-    { type: 'building', x: 44 * TILE, y: 30 * TILE, label: 'City Hall' },
-    { type: 'house', x: 12 * TILE, y: 34 * TILE, label: 'Your House' },
-    { type: 'furniture', x: 13 * TILE + 8, y: 36 * TILE + 8, label: 'Couch' },
-  ];
+  const objects: WorldObjectSpec[] = [];
+  const addBuilding = (tx: number, ty: number, type: WorldObjectSpec['type'], label: string) => {
+    objects.push({ type, x: tx * TILE, y: ty * TILE, label });
+  };
 
+  // Northridge landmarks
+  addBuilding(78, 76, 'shop', 'Start Park Kiosk');
+  addBuilding(64, 60, 'shop', 'Gun Point');
+  addBuilding(90, 58, 'shop', 'Fashion Mall');
+  addBuilding(104, 66, 'shop', 'Rico Motors');
+  addBuilding(72, 62, 'building', 'Era Hotel');
+  addBuilding(70, 82, 'building', "Speedy's Pizza");
+  addBuilding(84, 82, 'building', 'FoodMart');
+  addBuilding(60, 78, 'building', 'Police Station');
+  addBuilding(46, 80, 'building', 'Auction House');
+  addBuilding(90, 80, 'building', 'City Bank');
+  addBuilding(32, 74, 'building', 'Mercy West');
+  addBuilding(112, 74, 'building', 'Mercy East');
+  addBuilding(74, 42, 'building', 'Event House');
+  addBuilding(118, 46, 'building', 'Spar Complex');
+  addBuilding(16, 26, 'building', 'Airport Terminal');
+  addBuilding(120, 14, 'building', 'Snow Lodge');
+  addBuilding(24, 40, 'building', 'Water Park');
+  addBuilding(134, 74, 'building', 'Power Plant');
+  addBuilding(34, 52, 'building', 'Skate Arena');
+  addBuilding(14, 100, 'shop', 'Isra Shell Shack');
+  addBuilding(28, 102, 'shop', 'Bell Shell Shack');
+  addBuilding(10, 104, 'shop', "Wandi's Crab Shack");
+  addBuilding(18, 58, 'building', 'GZ Shop');
+  addBuilding(22, 88, 'building', 'BH Pizzeria');
+  addBuilding(124, 98, 'building', 'BBZ Mines');
+  addBuilding(14, 34, 'house', 'Player Starter Flat');
+
+  // Southridge landmarks
+  addBuilding(78, 154, 'building', 'Southridge Hospital');
+  addBuilding(86, 156, 'building', 'Southridge Pizza');
+  addBuilding(36, 154, 'building', 'South Mines');
+  addBuilding(110, 158, 'building', 'Pirate Zone HQ');
+  addBuilding(46, 178, 'building', 'Guerre Base');
+  addBuilding(100, 178, 'building', 'Neo Base');
+  addBuilding(24, 180, 'building', 'Cave Entrance');
+  addBuilding(70, 188, 'shop', 'South Shell Counter');
+
+  // Trees / rocks scatter (deterministic-ish)
+  for (let i = 0; i < 120; i++) {
+    const x = 6 + ((i * 37) % 148);
+    const y = 6 + ((i * 53) % 100);
+    if (cells[y][x].tile === 'grass') objects.push({ type: 'tree', x: x * TILE, y: y * TILE });
+  }
   for (let i = 0; i < 40; i++) {
-    const x = 2 + Math.floor(Math.random() * 20);
-    const y = 2 + Math.floor(Math.random() * 14);
-    if (cells[y][x].tile === 'grass') {
-      objects.push({ type: 'tree', x: x * TILE, y: y * TILE });
+    const x = 25 + ((i * 19) % 100);
+    const y = 140 + ((i * 23) % 50);
+    if (cells[y]?.[x]?.tile === 'grass' || cells[y]?.[x]?.tile === 'mine') {
+      objects.push({ type: 'rock', x: x * TILE, y: y * TILE });
     }
   }
-
-  for (let i = 0; i < 18; i++) {
-    objects.push({
-      type: 'rock',
-      x: (48 + Math.floor(Math.random() * 10)) * TILE,
-      y: (46 + Math.floor(Math.random() * 8)) * TILE,
-    });
-  }
-
-  for (let i = 0; i < 12; i++) {
+  for (let i = 0; i < 20; i++) {
     objects.push({
       type: 'crate',
-      x: (10 + Math.floor(Math.random() * 14)) * TILE,
-      y: (10 + Math.floor(Math.random() * 8)) * TILE,
+      x: (50 + (i % 10) * 2) * TILE,
+      y: (58 + Math.floor(i / 10) * 2) * TILE,
     });
   }
 
-  const npcs: NpcSpec[] = [
-    {
-      x: 32 * TILE,
-      y: 24 * TILE,
-      name: 'Vendor Vee',
-      role: 'shop',
-      lines: ['Weapons for sale. Press E to browse.', 'Guns and knives win spars.'],
-    },
-    {
-      x: 46 * TILE,
-      y: 24 * TILE,
-      name: 'Job Bot',
-      role: 'job',
-      lines: ['Fish, mine, dig, trash, pizza, mushrooms, flowers, mail.', 'Walk to a job zone and press E.'],
-    },
-    {
-      x: 36 * TILE,
-      y: 26 * TILE,
-      name: 'Guide G',
-      role: 'guide',
-      lines: [
-        'WASD move, Space attack, Shift dash, E interact, 1 eat food, C chat, I inventory, H house, G gang.',
-        'Safe plaza is no-PK. Spar and gang districts allow combat.',
-      ],
-    },
-    {
-      x: 64 * TILE,
-      y: 14 * TILE,
-      name: 'Spar Host',
-      role: 'guide',
-      lines: ['Welcome to the Spar Complex.', 'Challenge rivals here for practice kills.'],
-    },
-    {
-      x: 64 * TILE,
-      y: 42 * TILE,
-      name: 'Capo Rex',
-      role: 'gang',
-      lines: ['Create or join a crew with G.', 'Hold this base. Allies cannot hurt each other.'],
-    },
-  ];
-
-  const enemies: EnemySpec[] = [];
-  for (let i = 0; i < 8; i++) {
-    enemies.push({ x: (60 + Math.random() * 14) * TILE, y: (10 + Math.random() * 10) * TILE });
-  }
-  for (let i = 0; i < 10; i++) {
-    enemies.push({ x: (60 + Math.random() * 14) * TILE, y: (38 + Math.random() * 12) * TILE });
-  }
+  const labels: WorldLabel[] = DISTRICTS.map((d) => ({
+    x: (d.x + d.w / 2) * TILE,
+    y: (d.y + 1) * TILE,
+    text: d.name.toUpperCase(),
+    color: d.gangBase ? '#ff8a6a' : d.region === 'southridge' ? '#7ad0ff' : '#f0c14b',
+  }));
+  labels.push(
+    { x: 80 * TILE, y: 8 * TILE, text: 'NORTHRIDGE', color: '#3ecf8e' },
+    { x: 80 * TILE, y: 140 * TILE, text: 'SOUTHRIDGE ISLAND', color: '#7ad0ff' },
+    { x: 80 * TILE, y: 124 * TILE, text: 'BRIDGE', color: '#e8f0ff' },
+  );
 
   return {
     cells,
     objects,
-    npcs,
-    enemies,
-    spawn: { x: 36 * TILE, y: 26 * TILE },
-    mailDrop: { x: 46 * TILE, y: 32 * TILE },
-    pizzaStation: { x: 32 * TILE, y: 32 * TILE },
+    labels,
+    spawn: { x: 78 * TILE, y: 78 * TILE }, // Start Park
+    mailDrop: { x: 84 * TILE, y: 84 * TILE },
+    pizzaStation: { x: 72 * TILE, y: 84 * TILE },
+    warpPads: [
+      { x: 78, y: 94, label: 'Subway → Southridge', toX: 78, toY: 148 },
+      { x: 78, y: 148, label: 'Subway → Start Park', toX: 78, toY: 78 },
+      { x: 20, y: 28, label: 'Airport Shuttle → Spar', toX: 120, toY: 50 },
+      { x: 120, y: 50, label: 'Spar Shuttle → Airport', toX: 20, toY: 28 },
+    ],
   };
 }
 
@@ -203,4 +267,16 @@ export function tileAt(world: WorldData, wx: number, wy: number): WorldCell | nu
   const ty = Math.floor(wy / TILE);
   if (tx < 0 || ty < 0 || tx >= MAP_W || ty >= MAP_H) return null;
   return world.cells[ty][tx];
+}
+
+export function districtNameAt(world: WorldData, wx: number, wy: number): string {
+  const tx = Math.floor(wx / TILE);
+  const ty = Math.floor(wy / TILE);
+  const d = districtAt(tx, ty);
+  if (d) return d.name;
+  const cell = tileAt(world, wx, wy);
+  if (!cell) return 'Void';
+  if (cell.region === 'northridge') return 'Northridge';
+  if (cell.region === 'southridge') return 'Southridge';
+  return 'Channel';
 }

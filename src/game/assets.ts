@@ -84,6 +84,34 @@ export function generateTextures(scene: Phaser.Scene): void {
     g.fillRect(12, 12, 8, 8);
   });
 
+  px(scene, 'tile-snow', 32, 32, (g) => {
+    g.fillStyle(COLORS.snow, 1);
+    g.fillRect(0, 0, 32, 32);
+    g.fillStyle(0xffffff, 1);
+    g.fillRect(6, 8, 2, 2);
+    g.fillRect(20, 18, 2, 2);
+    g.fillRect(14, 4, 2, 2);
+  });
+
+  px(scene, 'tile-bridge', 32, 32, (g) => {
+    g.fillStyle(COLORS.bridge, 1);
+    g.fillRect(0, 0, 32, 32);
+    g.fillStyle(0x4a3a28, 1);
+    g.fillRect(0, 0, 32, 3);
+    g.fillRect(0, 29, 32, 3);
+    g.fillStyle(0x8a7a5c, 1);
+    g.fillRect(14, 0, 4, 32);
+  });
+
+  px(scene, 'tile-mine', 32, 32, (g) => {
+    g.fillStyle(COLORS.mine, 1);
+    g.fillRect(0, 0, 32, 32);
+    g.fillStyle(0x2a2a30, 1);
+    g.fillRect(8, 10, 16, 14);
+    g.fillStyle(0x6b4423, 1);
+    g.fillRect(4, 8, 24, 4);
+  });
+
   px(scene, 'building', 64, 64, (g) => {
     g.fillStyle(COLORS.building, 1);
     g.fillRect(0, 16, 64, 48);

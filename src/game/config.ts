@@ -1,11 +1,12 @@
 export const TILE = 32;
-export const MAP_W = 80;
-export const MAP_H = 60;
+/** Large Era-inspired dual-island city (Northridge + bridge + Southridge). */
+export const MAP_W = 160;
+export const MAP_H = 220;
 export const PLAYER_HP = 50;
-export const PLAYER_SPEED = 140;
+export const PLAYER_SPEED = 150;
 export const ATTACK_COOLDOWN_MS = 280;
 export const DASH_COOLDOWN_MS = 900;
-export const DASH_SPEED = 360;
+export const DASH_SPEED = 380;
 export const DASH_MS = 120;
 
 export const COLORS = {
@@ -27,6 +28,10 @@ export const COLORS = {
   safe: 0x2a4a3a,
   spar: 0x3a2a55,
   gang: 0x553020,
+  snow: 0xdce8f5,
+  bridge: 0x6b5a45,
+  mine: 0x3a3a42,
+  plaza: 0x4a6a4a,
 };
 
 export type Dir = 'up' | 'down' | 'left' | 'right';
