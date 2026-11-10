@@ -1,9 +1,13 @@
-export const TILE = 32;
-/** Large Era-inspired dual-island city (Northridge + bridge + Southridge). */
-export const MAP_W = 160;
-export const MAP_H = 220;
+/** Graal tile: 16×16 px. A level is 64×64 tiles (1024×1024 px). */
+export const TILE = 16;
+export const LEVEL_TILES = 64;
+/** Exported GMap raster, exact. */
+export const MAP_PX_W = 2352;
+export const MAP_PX_H = 1008;
+export const MAP_W = MAP_PX_W / TILE;
+export const MAP_H = MAP_PX_H / TILE;
 export const PLAYER_HP = 50;
-export const PLAYER_SPEED = 150;
+export const PLAYER_SPEED = 96;
 export const ATTACK_COOLDOWN_MS = 280;
 export const DASH_COOLDOWN_MS = 900;
 export const DASH_SPEED = 380;

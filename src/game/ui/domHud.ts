@@ -128,10 +128,11 @@ export function renderHud(state: GameState, extras?: { region?: string; hint?: s
   el('hud-kills').textContent = `${state.kills} kills`;
   el('hud-weapon').textContent = weapon.name;
   el('hud-effect').textContent = `${EFFECT_LABELS[weapon.effect]} · ${weapon.abilityLabel}`;
+  const note = state.combatNote ? ` · ${state.combatNote}` : '';
   el('hud-ammo').textContent =
     weapon.ammo === 'none'
-      ? 'Melee / utility'
-      : `Clip ${state.clipLeft}/${weapon.clip ?? 0} · ${weapon.ammo} ${state.ammo[weapon.ammo]}`;
+      ? `Melee / utility${note}`
+      : `Clip ${state.clipLeft}/${weapon.clip ?? 0} · ${weapon.ammo} ${state.ammo[weapon.ammo]}${note}`;
   const ride = state.activeCar ?? state.activeMount ?? 'On foot';
   const gang = state.gangName ? `${state.gangName}` : 'No gang';
   el('hud-ride').textContent = `${ride} · ${gang}`;

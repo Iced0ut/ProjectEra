@@ -53,6 +53,14 @@ export interface WeaponDef {
   healAmount?: number;
   range: number;
   cooldown: number;
+  /** Edge hit. Defaults from the family when omitted. */
+  grazeDamage?: number;
+  /** Movement lock after a shot, in ms. */
+  freezeMs?: number;
+  /** Bullet speed in pixels per second. */
+  projectileSpeed?: number;
+  /** Time to fill the clip, in ms. */
+  reloadMs?: number;
   clip?: number;
   pellets?: number;
   spread?: number;
@@ -450,6 +458,52 @@ export const WEAPONS: Record<string, WeaponDef> = {
 };
 
 export const WEAPON_LIST = Object.values(WEAPONS);
+
+export type HeldStyle = 'none' | 'melee' | 'gun' | 'staff';
+
+const FAMILY_TIMING: Record<WeaponFamily, { freezeMs: number; projectileSpeed: number; reloadMs: number; graze: number }> = {
+  melee: { freezeMs: 70, projectileSpeed: 0, reloadMs: 0, graze: 1 },
+  pistol: { freezeMs: 100, projectileSpeed: 460, reloadMs: 800, graze: 0.45 },
+  rifle: { freezeMs: 120, projectileSpeed: 520, reloadMs: 1000, graze: 0.5 },
+  smg: { freezeMs: 45, projectileSpeed: 500, reloadMs: 950, graze: 0.4 },
+  lmg: { freezeMs: 70, projectileSpeed: 480, reloadMs: 1400, graze: 0.4 },
+  shotgun: { freezeMs: 170, projectileSpeed: 340, reloadMs: 1200, graze: 0.3 },
+  sniper: { freezeMs: 260, projectileSpeed: 780, reloadMs: 1500, graze: 0.6 },
+  launcher: { freezeMs: 200, projectileSpeed: 280, reloadMs: 1600, graze: 0.5 },
+  staff: { freezeMs: 90, projectileSpeed: 400, reloadMs: 700, graze: 0.5 },
+  exotic: { freezeMs: 80, projectileSpeed: 450, reloadMs: 900, graze: 0.45 },
+  grenade: { freezeMs: 60, projectileSpeed: 260, reloadMs: 0, graze: 0.5 },
+  shield: { freezeMs: 40, projectileSpeed: 0, reloadMs: 0, graze: 1 },
+};
+
+export interface WeaponTiming {
+  grazeDamage: number;
+  freezeMs: number;
+  projectileSpeed: number;
+  reloadMs: number;
+  clip: number;
+  spread: number;
+}
+
+export function weaponTiming(weapon: WeaponDef): WeaponTiming {
+  const family = FAMILY_TIMING[weapon.family];
+  const graze = weapon.grazeDamage ?? Math.max(1, Math.round(weapon.damage * family.graze));
+  return {
+    grazeDamage: graze,
+    freezeMs: weapon.freezeMs ?? family.freezeMs,
+    projectileSpeed: weapon.projectileSpeed ?? family.projectileSpeed,
+    reloadMs: weapon.reloadMs ?? family.reloadMs,
+    clip: weapon.clip ?? 0,
+    spread: weapon.spread ?? 0,
+  };
+}
+
+export function heldStyle(weapon: WeaponDef): HeldStyle {
+  if (weapon.family === 'staff') return 'staff';
+  if (weapon.kind === 'melee' || weapon.kind === 'shield') return 'melee';
+  if (weapon.kind === 'gun' || weapon.kind === 'throwable') return 'gun';
+  return 'none';
+}
 
 export function weaponsByShop(shop: WeaponDef['shop']): WeaponDef[] {
   return WEAPON_LIST.filter((wpn) => wpn.shop === shop);

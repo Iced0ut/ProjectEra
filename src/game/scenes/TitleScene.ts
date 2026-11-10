@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { playMusic, playSfx } from '../audio';
-import { createInitialState, type PlayerProfile } from '../state';
+import { loadOrCreate } from '../save';
+import type { PlayerProfile } from '../state';
 import { hideTitle, showTitle } from '../ui/domHud';
 
 export class TitleScene extends Phaser.Scene {
@@ -34,7 +35,7 @@ export class TitleScene extends Phaser.Scene {
         // ignore audio unlock races
       }
       hideTitle();
-      const state = createInitialState(profile);
+      const state = loadOrCreate(profile);
       this.scene.start('world', { state });
       this.scene.launch('hud', { state });
     };

@@ -52,58 +52,47 @@ export interface DistrictDef {
 }
 
 /**
- * Coordinates are in tiles on the big city grid.
- * Northridge occupies the north landmass; a water channel + bridge
- * connect to Southridge island in the south.
+ * Tile coords on the exported GMap: 147×63 tiles (2352×1008 px at 16 px).
+ * Northridge is the west land, Southridge the east land, channel between.
  */
 export const DISTRICTS: DistrictDef[] = [
-  // ---- Northridge core ----
-  { id: 'start_park', name: 'Starter Area', region: 'northridge', x: 68, y: 70, w: 24, h: 18, noPk: true, blurb: 'Player spawn plaza — safe hub (not the beach).' },
-  { id: 'downtown', name: 'Downtown', region: 'northridge', x: 60, y: 55, w: 40, h: 40, noPk: true, blurb: 'Shops, FoodMart, police.' },
-  { id: 'hotel_row', name: 'Era Hotel Row', region: 'northridge', x: 55, y: 48, w: 20, h: 12, noPk: true, blurb: 'Hotels and Astro Bar.' },
-  { id: 'fashion_mall', name: 'Fashion Mall', region: 'northridge', x: 82, y: 48, w: 22, h: 14, noPk: true, blurb: 'Hats, bodies, clothing.' },
-  { id: 'gun_row', name: 'Gun Point Row', region: 'northridge', x: 48, y: 60, w: 16, h: 16, noPk: true, blurb: 'Firearms and melee shops.' },
-  { id: 'car_row', name: 'Rico Auto Mile', region: 'northridge', x: 100, y: 62, w: 18, h: 14, noPk: true, blurb: 'Cars and skateboards.' },
-  { id: 'auction', name: 'Auction House', region: 'northridge', x: 42, y: 78, w: 16, h: 12, noPk: true, blurb: 'Always-safe trading lobby.' },
-  { id: 'bank', name: 'City Bank', region: 'northridge', x: 88, y: 78, w: 14, h: 12, gangBase: true, blurb: 'Contested bank income node.' },
-  { id: 'event_house', name: 'Event House', region: 'northridge', x: 70, y: 40, w: 18, h: 12, noPk: true, blurb: 'Mini-events lobby.' },
-  { id: 'spar_complex', name: 'Spar Complex', region: 'northridge', x: 110, y: 40, w: 28, h: 20, blurb: 'Duels and spar bots.' },
-  { id: 'skate_park', name: 'Bam Skate Park', region: 'northridge', x: 30, y: 48, w: 16, h: 14, noPk: true, blurb: 'Skate arena.' },
-  { id: 'subway', name: 'Ebizou Subway', region: 'northridge', x: 72, y: 92, w: 16, h: 10, noPk: true, blurb: 'Central subway pond.' },
+  { id: 'parkland', name: 'North Parks', region: 'northridge', x: 28, y: 1, w: 30, h: 12, noPk: true, blurb: 'Open parkland.' },
+  { id: 'airport', name: 'Airport', region: 'northridge', x: 2, y: 1, w: 24, h: 12, noPk: true, blurb: 'North airport grounds.' },
+  { id: 'snow_resort', name: 'Snow Resort', region: 'northridge', x: 60, y: 1, w: 34, h: 12, noPk: true, blurb: 'Winter slopes and lodge.' },
+  { id: 'water_park', name: 'Water Park', region: 'northridge', x: 2, y: 14, w: 18, h: 12, noPk: true, blurb: 'Water park.' },
+  { id: 'skate_park', name: 'Skate Park', region: 'northridge', x: 22, y: 14, w: 14, h: 12, noPk: true, blurb: 'Skate arena.' },
+  { id: 'mafia', name: 'Mafia Zone', region: 'northridge', x: 38, y: 14, w: 14, h: 12, gangBase: true, blurb: 'Mafia base.' },
+  { id: 'lethal', name: 'Lethal Securities', region: 'northridge', x: 54, y: 14, w: 14, h: 12, gangBase: true, blurb: 'Lethal base.' },
+  { id: 'tachi', name: 'Tachi Zone', region: 'northridge', x: 70, y: 14, w: 24, h: 12, gangBase: true, blurb: 'Tachi base.' },
+  { id: 'spar_complex', name: 'Spar Complex', region: 'northridge', x: 2, y: 28, w: 22, h: 12, blurb: 'Duels and spar bots.' },
+  { id: 'hotel_row', name: 'Hotel Row', region: 'northridge', x: 26, y: 28, w: 16, h: 10, noPk: true, blurb: 'Hotels.' },
+  { id: 'fashion_mall', name: 'Fashion Mall', region: 'northridge', x: 44, y: 28, w: 18, h: 10, noPk: true, blurb: 'Hats and clothing.' },
+  { id: 'event_house', name: 'Event House', region: 'northridge', x: 64, y: 28, w: 16, h: 10, noPk: true, blurb: 'Events lobby.' },
+  { id: 'gz', name: 'Gangster Zone', region: 'northridge', x: 82, y: 28, w: 12, h: 12, gangBase: true, blurb: 'GZ base.' },
+  { id: 'auction', name: 'Auction House', region: 'northridge', x: 2, y: 42, w: 20, h: 10, noPk: true, blurb: 'Safe trade lobby.' },
+  { id: 'gun_row', name: 'Gun Point', region: 'northridge', x: 24, y: 42, w: 14, h: 8, noPk: true, blurb: 'Firearms and melee.' },
+  { id: 'downtown', name: 'Downtown', region: 'northridge', x: 40, y: 40, w: 28, h: 12, noPk: true, blurb: 'Shops and police.' },
+  { id: 'start_park', name: 'Starter Area', region: 'northridge', x: 46, y: 42, w: 16, h: 8, noPk: true, blurb: 'Spawn plaza. Not the beach.' },
+  { id: 'car_row', name: 'Auto Mile', region: 'northridge', x: 70, y: 40, w: 12, h: 8, noPk: true, blurb: 'Cars and boards.' },
+  { id: 'mercy_east', name: 'Mercy East', region: 'northridge', x: 70, y: 50, w: 22, h: 6, noPk: true, blurb: 'East hospital.' },
+  { id: 'bank', name: 'City Bank', region: 'northridge', x: 70, y: 56, w: 14, h: 6, gangBase: true, blurb: 'Bank node.' },
+  { id: 'bbz', name: 'Blazian Bandits', region: 'northridge', x: 84, y: 50, w: 10, h: 12, gangBase: true, blurb: 'BBZ base.' },
+  { id: 'power_plant', name: 'Power Plant', region: 'northridge', x: 84, y: 40, w: 10, h: 8, blurb: 'Industrial edge.' },
+  { id: 'mercy_west', name: 'Mercy West', region: 'northridge', x: 2, y: 54, w: 18, h: 8, noPk: true, blurb: 'West hospital.' },
+  { id: 'blackholst', name: 'Blackholst', region: 'northridge', x: 22, y: 52, w: 12, h: 10, gangBase: true, blurb: 'BH base.' },
+  { id: 'harbour', name: 'Harbour', region: 'northridge', x: 36, y: 54, w: 16, h: 8, noPk: true, blurb: 'Docks and shell shops.' },
+  { id: 'mercy_beach', name: 'Mercy Beach', region: 'northridge', x: 52, y: 54, w: 16, h: 8, noPk: true, blurb: 'Shell digging sand.' },
+  { id: 'subway', name: 'Subway', region: 'northridge', x: 46, y: 34, w: 10, h: 6, noPk: true, blurb: 'Warp pad.' },
+  { id: 'bridge', name: 'Southridge Bridge', region: 'channel', x: 96, y: 26, w: 14, h: 10, noPk: true, blurb: 'Bridge to Southridge.' },
 
-  // Hospitals / beach
-  { id: 'mercy_west', name: 'Mercy West Hospital', region: 'northridge', x: 28, y: 72, w: 18, h: 14, noPk: true, blurb: 'West medical + park.' },
-  { id: 'mercy_east', name: 'Mercy East Hospital', region: 'northridge', x: 108, y: 72, w: 18, h: 14, noPk: true, blurb: 'East hospital and park.' },
-  { id: 'mercy_beach', name: 'Mercy Beach', region: 'northridge', x: 8, y: 95, w: 40, h: 22, noPk: true, blurb: 'Shell digging shores.' },
-  { id: 'harbour', name: 'North Harbour', region: 'northridge', x: 48, y: 100, w: 24, h: 14, noPk: true, blurb: 'Docks and shell shops.' },
-
-  // North landmarks
-  { id: 'airport', name: 'Air Asia Airport', region: 'northridge', x: 10, y: 20, w: 32, h: 22, noPk: true, blurb: 'North airport grounds.' },
-  { id: 'snow_resort', name: 'Snow Resort', region: 'northridge', x: 110, y: 8, w: 36, h: 24, noPk: true, blurb: 'Winter slopes and lodge.' },
-  { id: 'water_park', name: 'Water Park', region: 'northridge', x: 20, y: 35, w: 22, h: 16, noPk: true, blurb: 'Snapshot water park.' },
-  { id: 'power_plant', name: 'Power Plant', region: 'northridge', x: 130, y: 70, w: 20, h: 16, blurb: 'Industrial edge.' },
-
-  // Northridge gang bases
-  { id: 'gz', name: 'Gangster Zone', region: 'northridge', x: 8, y: 55, w: 18, h: 16, gangBase: true, blurb: 'GZ base.' },
-  { id: 'tachi', name: 'Tachi Zone', region: 'northridge', x: 130, y: 30, w: 18, h: 16, gangBase: true, blurb: 'Tachi base.' },
-  { id: 'blackholst', name: 'Blackholst Zone', region: 'northridge', x: 20, y: 85, w: 18, h: 14, gangBase: true, blurb: 'BH base near west.' },
-  { id: 'bbz', name: 'Blazian Bandits', region: 'northridge', x: 120, y: 95, w: 20, h: 14, gangBase: true, blurb: 'BBZ base + mines.' },
-  { id: 'lethal', name: 'Lethal Securities', region: 'northridge', x: 95, y: 28, w: 16, h: 14, gangBase: true, blurb: 'Lethal base.' },
-  { id: 'mafia', name: 'Mafia Zone', region: 'northridge', x: 40, y: 28, w: 16, h: 14, gangBase: true, blurb: 'Mafia base.' },
-
-  // Channel
-  { id: 'bridge', name: 'Southridge Bridge', region: 'channel', x: 70, y: 118, w: 20, h: 16, noPk: true, blurb: 'Bridge to Southridge Island.' },
-
-  // ---- Southridge ----
-  { id: 'southridge', name: 'Southridge Town', region: 'southridge', x: 55, y: 145, w: 50, h: 30, noPk: true, blurb: 'South island town center.' },
-  { id: 'south_hospital', name: 'Southridge Hospital', region: 'southridge', x: 70, y: 150, w: 16, h: 12, noPk: true, blurb: 'Island hospital + pizza.' },
-  { id: 'south_mines', name: 'Southridge Mines', region: 'southridge', x: 30, y: 150, w: 22, h: 18, blurb: 'Mine shafts and quests.' },
-  { id: 'pirate_zone', name: 'Pirate Zone', region: 'southridge', x: 105, y: 155, w: 22, h: 18, gangBase: true, blurb: 'PZ gang base.' },
-  { id: 'guerre', name: 'Guerre Zone', region: 'southridge', x: 40, y: 175, w: 22, h: 16, gangBase: true, blurb: 'Guerre base + dangerous mines.' },
-  { id: 'neo', name: 'Neo Zone', region: 'southridge', x: 95, y: 175, w: 22, h: 16, gangBase: true, blurb: 'Neo gang base.' },
-  { id: 'south_beach', name: 'Southridge Beach', region: 'southridge', x: 55, y: 185, w: 40, h: 18, noPk: true, blurb: 'Southern shelling sands.' },
-  { id: 'cave_coast', name: 'Cave Coast', region: 'southridge', x: 20, y: 175, w: 18, h: 20, blurb: 'Mysterious cave entrance.' },
-  { id: 'parkland', name: 'North Parks', region: 'northridge', x: 60, y: 10, w: 40, h: 20, noPk: true, blurb: 'Open parkland north of downtown.' },
+  { id: 'cave_coast', name: 'Cave Coast', region: 'southridge', x: 112, y: 2, w: 10, h: 12, blurb: 'Cave entrance.' },
+  { id: 'southridge', name: 'Southridge Town', region: 'southridge', x: 124, y: 2, w: 20, h: 16, noPk: true, blurb: 'Island town.' },
+  { id: 'south_hospital', name: 'South Hospital', region: 'southridge', x: 128, y: 6, w: 12, h: 8, noPk: true, blurb: 'Hospital and pizza.' },
+  { id: 'south_mines', name: 'South Mines', region: 'southridge', x: 112, y: 16, w: 16, h: 14, blurb: 'Mine shafts.' },
+  { id: 'pirate_zone', name: 'Pirate Zone', region: 'southridge', x: 130, y: 16, w: 14, h: 14, gangBase: true, blurb: 'PZ base.' },
+  { id: 'guerre', name: 'Guerre Zone', region: 'southridge', x: 112, y: 32, w: 16, h: 14, gangBase: true, blurb: 'Guerre base.' },
+  { id: 'neo', name: 'Neo Zone', region: 'southridge', x: 130, y: 32, w: 14, h: 14, gangBase: true, blurb: 'Neo base.' },
+  { id: 'south_beach', name: 'South Beach', region: 'southridge', x: 112, y: 48, w: 32, h: 12, noPk: true, blurb: 'Southern sand.' },
 ];
 
 export function districtAt(tx: number, ty: number): DistrictDef | null {
@@ -122,8 +111,8 @@ export function districtAt(tx: number, ty: number): DistrictDef | null {
   return best;
 }
 
-export function regionAt(ty: number): 'northridge' | 'channel' | 'southridge' {
-  if (ty < 118) return 'northridge';
-  if (ty < 134) return 'channel';
-  return 'southridge';
+export function regionAt(tx: number): 'northridge' | 'channel' | 'southridge' {
+  if (tx >= 112) return 'southridge';
+  if (tx >= 96) return 'channel';
+  return 'northridge';
 }

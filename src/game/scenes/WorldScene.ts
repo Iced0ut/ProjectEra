@@ -10,6 +10,8 @@ import {
   TILE,
   type Dir,
 } from '../config';
+import { saveGame } from '../save';
+import { levelLabel } from '../world/levels';
 import {
   EFFECT_LABELS,
   applyOnHitToStatus,
@@ -19,7 +21,7 @@ import {
   weaponDamage,
   type StatusState,
 } from '../combat';
-import { WEAPONS, weaponsByShop, type WeaponDef } from '../content/weapons';
+import { WEAPONS, heldStyle, weaponTiming, weaponsByShop, type WeaponDef } from '../content/weapons';
 import { AMBIENT_CITIZEN_SPOTS, CITY_NPCS, createCityBots, type BotDef, type NpcDef } from '../content/npcs';
 import {
   CRAB_DIG_CHANCE,
@@ -43,7 +45,7 @@ import {
   type GameState,
   type JobId,
 } from '../state';
-import { createWorld, districtNameAt, tileAt, type WorldData } from '../world';
+import { createWorld, districtNameAt, tileAt, type JobStation, type WorldData } from '../world';
 import { playMusic, playSfx } from '../audio';
 import { DISTRICTS } from '../content/districts';
 import { actorKeyFor, paintActorSheet, playActorAnim, type ActorLook } from '../sprites/characters';
@@ -78,12 +80,19 @@ export class WorldScene extends Phaser.Scene {
   private shellDrops!: Phaser.Physics.Arcade.Group;
   private citizens!: Phaser.Physics.Arcade.Group;
   private npcSprites: { sprite: Phaser.Physics.Arcade.Image; def: NpcDef }[] = [];
+  private namePlates: { text: Phaser.GameObjects.Text; x: number; y: number }[] = [];
   private nameTag!: Phaser.GameObjects.Text;
   private playerStatus = createStatus();
   private digReady = 0;
   private digSerial = 0;
   private hudTick = 0;
+  private saveTick = 0;
   private actorKey = 'actor-player';
+  private frozenUntil = 0;
+  private reloadUntil = 0;
+  private levelSeen = '';
+  private jobWork: { station: JobStation; until: number; originX: number; originY: number } | null = null;
+  private jobReadyAt = new Map<string, number>();
 
   constructor() {
     super('world');
@@ -94,21 +103,35 @@ export class WorldScene extends Phaser.Scene {
   }
 
   create(): void {
+    this.cameras.main.setBackgroundColor('#16324a');
     this.world = createWorld();
     this.physics.world.setBounds(0, 0, MAP_W * TILE, MAP_H * TILE);
     this.drawTiles();
 
     this.solids = this.physics.add.staticGroup();
     for (const obj of this.world.objects) {
-      // Decor only for trees/rocks/crates — collide with buildings/shops/houses
-      if (obj.type === 'tree' || obj.type === 'rock' || obj.type === 'crate' || obj.type === 'furniture') {
-        this.add.image(obj.x + 16, obj.y + 16, obj.type).setDepth(obj.y);
+      // Bottom is the ground texture. Middle holds walls and trunks. Top is roofs and canopies.
+      if (obj.type === 'tree') {
+        this.add.image(obj.x + TILE, obj.y + TILE + 8, 'trunk').setDepth(obj.y).setDisplaySize(14, 16);
+        this.add.image(obj.x + TILE, obj.y + 2, 'canopy').setDepth(120000).setDisplaySize(36, 22);
         continue;
       }
-      const sprite = this.solids.create(obj.x + 16, obj.y + 16, obj.type) as Phaser.Physics.Arcade.Sprite;
-      sprite.setDepth(obj.y);
-      sprite.setSize(50, 36).setOffset(7, 24);
+      if (obj.type === 'rock' || obj.type === 'crate' || obj.type === 'furniture') {
+        this.add.image(obj.x + TILE, obj.y + TILE, obj.type).setDepth(obj.y);
+        continue;
+      }
+      const sprite = this.solids.create(obj.x + TILE, obj.y + TILE + 6, obj.type) as Phaser.Physics.Arcade.Sprite;
+      sprite.setDepth(obj.y + 8);
+      sprite.setDisplaySize(obj.type === 'house' ? 36 : 48, obj.type === 'shop' ? 22 : 26);
+      sprite.setSize(30, 12).setOffset(6, 12);
+      const roof = this.add.image(obj.x + TILE, obj.y + 2, 'roof').setDepth(120000);
+      roof.setDisplaySize(obj.type === 'house' ? 40 : 54, 16);
     }
+    for (const station of this.world.jobStations) {
+      const key = station.job === 'trash' ? 'trash-pile' : station.job === 'mining' ? 'ore-vein' : 'assembly-bay';
+      this.add.image(station.x, station.y, key).setDepth(station.y).setDisplaySize(28, 18);
+    }
+    this.events.once('shutdown', () => saveGame(this.state));
 
     this.player = this.physics.add.sprite(this.world.spawn.x, this.world.spawn.y, 'player');
     this.player.setCollideWorldBounds(true);
@@ -148,7 +171,7 @@ export class WorldScene extends Phaser.Scene {
 
     this.cameras.main.startFollow(this.player, true, 0.12, 0.12);
     this.cameras.main.setBounds(0, 0, MAP_W * TILE, MAP_H * TILE);
-    this.cameras.main.setZoom(1.1);
+    this.cameras.main.setZoom(2);
 
     if (!this.input.keyboard) throw new Error('Keyboard required');
     this.cursors = this.input.keyboard.createCursorKeys();
@@ -163,7 +186,8 @@ export class WorldScene extends Phaser.Scene {
     this.game.events.emit('era-state', this.state);
     this.pushChat(`Spawned at Starter Area · ${DISTRICTS.length} districts · ${MAP_W}x${MAP_H} tiles.`);
     this.pushChat(`${CITY_NPCS.length} NPCs · ${AMBIENT_CITIZEN_SPOTS.length} citizens · ${createCityBots().length} bots.`);
-    this.pushChat('Mercy Beach is southwest for digging. Bridge/subway leads to Southridge.');
+    this.pushChat('Mercy Beach is along the south shore. Cross the bridge east into Southridge.');
+    this.pushChat('Timed jobs: trash piles, South Mines ore, Auto Mile assembly. Your city saves on this computer.');
   }
 
   update(time: number, delta = 16): void {
@@ -178,6 +202,16 @@ export class WorldScene extends Phaser.Scene {
     this.nameTag.setPosition(this.player.x, this.player.y - 28);
     this.player.setDepth(this.player.y);
 
+    this.tickReload(time);
+    this.tickJob(time);
+    if (time >= this.frozenUntil && this.reloadUntil === 0 && !this.jobWork && this.state.combatNote) {
+      this.state.combatNote = '';
+    }
+    this.saveTick += delta;
+    if (this.saveTick >= 5000) {
+      this.saveTick = 0;
+      saveGame(this.state);
+    }
     this.hudTick += delta;
     if (this.hudTick >= 100) {
       this.hudTick = 0;
@@ -185,10 +219,21 @@ export class WorldScene extends Phaser.Scene {
       if (cell) {
         const pk = cell.noPk ? 'NO-PK' : 'PK';
         const place = districtNameAt(this.world, this.player.x, this.player.y);
-        this.game.events.emit('era-region', `${cell.region} · ${place} · ${pk}`);
+        const tx = Math.floor(this.player.x / TILE);
+        const ty = Math.floor(this.player.y / TILE);
+        const level = levelLabel(tx, ty);
+        if (this.levelSeen && level !== this.levelSeen) {
+          this.pushChat(`Crossed into level ${level}. The city keeps scrolling.`);
+        }
+        this.levelSeen = level;
+        this.game.events.emit('era-region', `${cell.region} · ${place} · ${pk} · ${level}`);
       }
       this.game.events.emit('era-hint', this.nearInteractLabel());
       this.game.events.emit('era-state', this.state);
+      for (const plate of this.namePlates) {
+        const near = Phaser.Math.Distance.Between(this.player.x, this.player.y, plate.x, plate.y) < 56;
+        plate.text.setVisible(near);
+      }
     }
   }
 
@@ -198,7 +243,8 @@ export class WorldScene extends Phaser.Scene {
       const key = this.sheetFor(`${npc.id}`, this.lookFromSeed(npc.id.length + npc.x, npc.role === 'police' ? 1 : 0));
       const sprite = this.physics.add.staticImage(npc.x * TILE, npc.y * TILE, key, 0);
       sprite.setDepth(npc.y * TILE);
-      this.add
+      sprite.setDisplaySize(32, 32);
+      const tag = this.add
         .text(npc.x * TILE, npc.y * TILE - 26, npc.name, {
           fontFamily: 'Sora, sans-serif',
           fontSize: '11px',
@@ -209,7 +255,9 @@ export class WorldScene extends Phaser.Scene {
         })
         .setOrigin(0.5)
         .setDepth(npc.y * TILE + 1)
-        .setResolution(2);
+        .setResolution(2)
+        .setVisible(false);
+      this.namePlates.push({ text: tag, x: npc.x * TILE, y: npc.y * TILE });
       this.npcSprites.push({ sprite, def: npc });
     }
   }
@@ -225,7 +273,7 @@ export class WorldScene extends Phaser.Scene {
       spr.setDepth(c.y * TILE);
       spr.setDisplaySize(32, 32);
       spr.setSize(16, 12).setOffset(4, 18);
-      this.add
+      const tag = this.add
         .text(c.x * TILE, c.y * TILE - 22, c.name, {
           fontFamily: 'Sora, sans-serif',
           fontSize: '10px',
@@ -237,7 +285,8 @@ export class WorldScene extends Phaser.Scene {
         .setOrigin(0.5)
         .setDepth(c.y * TILE + 1)
         .setResolution(2)
-        .setName(`citizen_label_${c.name}`);
+        .setVisible(false);
+      this.namePlates.push({ text: tag, x: c.x * TILE, y: c.y * TILE });
     }
   }
 
@@ -272,32 +321,15 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private drawTiles(): void {
-    // Fast span-filled ground (avoids 30k+ texture stamps that freeze the tab)
-    const colors: Record<string, number> = {
-      grass: 0x3f7a45,
-      path: 0x8a7a5c,
-      road: 0x4a4f58,
-      sidewalk: 0x6b7280,
-      water: 0x2a6f9e,
-      sand: 0xd2b48c,
-      pk: 0x4a2030,
-      safe: 0x2a4a3a,
-      spar: 0x3a2a55,
-      gang: 0x553020,
-      snow: 0xdce8f5,
-      bridge: 0x6b5a45,
-      mine: 0x3a3a42,
-    };
-    const g = this.add.graphics().setDepth(0);
+    const rt = this.add.renderTexture(0, 0, MAP_W * TILE, MAP_H * TILE).setOrigin(0, 0).setDepth(0);
     for (let y = 0; y < MAP_H; y++) {
-      let x = 0;
-      while (x < MAP_W) {
+      for (let x = 0; x < MAP_W; x++) {
         const tile = this.world.cells[y][x].tile;
-        let x2 = x + 1;
-        while (x2 < MAP_W && this.world.cells[y][x2].tile === tile) x2 += 1;
-        g.fillStyle(colors[tile] ?? 0x3f7a45, 1);
-        g.fillRect(x * TILE, y * TILE, (x2 - x) * TILE, TILE);
-        x = x2;
+        const alt = (x + y) % 2 === 1;
+        let key = `tile-${tile}`;
+        if (alt && this.textures.exists(`${key}-b`)) key = `${key}-b`;
+        if (!this.textures.exists(key)) key = 'tile-grass';
+        rt.draw(key, x * TILE, y * TILE);
       }
     }
   }
@@ -368,6 +400,7 @@ export class WorldScene extends Phaser.Scene {
       pants: this.state.profile.pants,
       hat: this.state.profile.hat,
       skin: 0,
+      held: heldStyle(currentWeapon(this.state)),
     };
     this.actorKey = this.sheetFor('player', look);
     this.player.setTexture(this.actorKey, 0);
@@ -395,10 +428,15 @@ export class WorldScene extends Phaser.Scene {
       this.dir = 'down';
     }
 
-    if (Phaser.Input.Keyboard.JustDown(this.keys.SHIFT) && time > this.dashReady) {
+    const frozen = time < this.frozenUntil;
+    if (!frozen && Phaser.Input.Keyboard.JustDown(this.keys.SHIFT) && time > this.dashReady) {
       this.dashingUntil = time + DASH_MS;
       this.dashReady = time + DASH_COOLDOWN_MS;
       playSfx(this, 'dash', 0.35);
+    }
+    if (frozen) {
+      vx = 0;
+      vy = 0;
     }
 
     const statusMul = moveSpeedMultiplier(this.playerStatus, time);
@@ -442,13 +480,16 @@ export class WorldScene extends Phaser.Scene {
     if (weapon.kind === 'melee' || weapon.kind === 'shield') {
       this.doMelee(weapon, time);
     } else if (weapon.kind === 'gun') {
-      this.doGun(weapon);
+      this.doGun(weapon, time);
     } else if (weapon.kind === 'throwable') {
       this.doThrowable(weapon, time);
     }
   }
 
   private doMelee(weapon: WeaponDef, time: number): void {
+    const timing = weaponTiming(weapon);
+    this.frozenUntil = time + timing.freezeMs;
+    if (timing.freezeMs >= 60) this.state.combatNote = 'Freeze';
     playSfx(this, 'swing', 0.4);
     const v = DIR_VEC[this.dir];
     const slash = this.add.image(this.player.x + v.x * 28, this.player.y + v.y * 28, 'slash');
@@ -471,7 +512,12 @@ export class WorldScene extends Phaser.Scene {
     });
   }
 
-  private doGun(weapon: WeaponDef): void {
+  private doGun(weapon: WeaponDef, time: number): void {
+    const timing = weaponTiming(weapon);
+    if (time < this.reloadUntil) {
+      this.pushChat('Still reloading.');
+      return;
+    }
     if (weapon.ammo !== 'none') {
       if (this.state.clipLeft <= 0) {
         const pool = this.state.ammo[weapon.ammo];
@@ -480,13 +526,17 @@ export class WorldScene extends Phaser.Scene {
           playSfx(this, 'ui');
           return;
         }
-        const reload = Math.min(weapon.clip ?? 12, pool);
-        this.state.ammo[weapon.ammo] -= reload;
-        this.state.clipLeft = reload;
-        this.pushChat(`Reloaded ${reload} ${weapon.ammo}.`);
+        this.reloadUntil = time + timing.reloadMs;
+        this.frozenUntil = time + Math.min(120, timing.freezeMs);
+        this.state.combatNote = 'Reloading';
+        playSfx(this, 'ui');
+        this.pushChat(`Reloading (${(timing.reloadMs / 1000).toFixed(1)}s)…`);
+        return;
       }
       this.state.clipLeft -= 1;
     }
+    this.frozenUntil = Math.max(this.frozenUntil, time + timing.freezeMs);
+    if (timing.freezeMs >= 80) this.state.combatNote = 'Freeze';
 
     if (weapon.ability === 'alt_heal' && this.state.altHealMode) {
       const heal = weapon.healAmount ?? 4;
@@ -498,7 +548,8 @@ export class WorldScene extends Phaser.Scene {
 
     playSfx(this, 'shoot', 0.35);
     const pellets = weapon.pellets ?? 1;
-    const spread = weapon.spread ?? 0;
+    const spread = timing.spread;
+    const speed = timing.projectileSpeed || 420;
     const base = Math.atan2(DIR_VEC[this.dir].y, DIR_VEC[this.dir].x);
     for (let i = 0; i < pellets; i++) {
       const angle = base + (pellets === 1 ? 0 : -spread + (spread * 2 * i) / Math.max(1, pellets - 1));
@@ -506,8 +557,12 @@ export class WorldScene extends Phaser.Scene {
       bullet.setDepth(2000);
       bullet.setData('weaponId', weapon.id);
       bullet.setData('damage', weaponDamage(weapon, this.state.clipLeft + 1));
-      this.physics.velocityFromRotation(angle, 420, bullet.body!.velocity);
-      this.time.delayedCall(800, () => bullet.destroy());
+      bullet.setData('graze', timing.grazeDamage);
+      this.physics.velocityFromRotation(angle, speed, bullet.body!.velocity);
+      const life = Math.min(1400, (weapon.range / speed) * 1000 + 120);
+      this.time.delayedCall(life, () => {
+        if (bullet.active) bullet.destroy();
+      });
     }
   }
 
@@ -621,12 +676,12 @@ export class WorldScene extends Phaser.Scene {
     }
   }
 
-  private damageBot(enemy: BotSprite, weapon: WeaponDef, time: number): void {
+  private damageBot(enemy: BotSprite, weapon: WeaponDef, time: number, amount?: number, graze = false): void {
     if (enemy.bot.kind === 'training_dummy') {
       // still apply visuals/effects for testing
     }
-    let dmg = weaponDamage(weapon, this.state.clipLeft);
-    if (weapon.kind === 'throwable') dmg = weapon.damage;
+    let dmg = amount ?? weaponDamage(weapon, this.state.clipLeft);
+    if (amount === undefined && weapon.kind === 'throwable') dmg = weapon.damage;
 
     const hit = applyOnHitToStatus(enemy.status, weapon.effect, weapon.effectPower, time);
     if (hit.healAttacker > 0 || weapon.effect === 'lifesteal') {
@@ -649,6 +704,7 @@ export class WorldScene extends Phaser.Scene {
     }
 
     enemy.hp -= dmg;
+    this.floatHit(enemy.x, enemy.y - 8, graze ? `graze ${Math.round(dmg)}` : `${Math.round(dmg)}`, graze ? '#f0c14b' : '#f4f7fb');
     playSfx(this, 'hit');
     enemy.setTintFill(0xffffff);
     this.time.delayedCall(60, () => {
@@ -776,9 +832,101 @@ export class WorldScene extends Phaser.Scene {
   private bulletHit(bullet: Phaser.Physics.Arcade.Sprite, enemy: BotSprite): void {
     const weaponId = bullet.getData('weaponId') as string;
     const weapon = WEAPONS[weaponId] ?? currentWeapon(this.state);
+    const dist = Phaser.Math.Distance.Between(bullet.x, bullet.y, enemy.x, enemy.y);
+    const graze = dist > 11;
+    const direct = (bullet.getData('damage') as number) || weapon.damage;
+    const grazed = (bullet.getData('graze') as number) || Math.max(1, Math.round(direct * 0.45));
     bullet.destroy();
     if (!enemy.active) return;
-    this.damageBot(enemy, weapon, this.time.now);
+    this.damageBot(enemy, weapon, this.time.now, graze ? grazed : direct, graze);
+  }
+
+  private floatHit(x: number, y: number, text: string, color: string): void {
+    const label = this.add
+      .text(x, y, text, {
+        fontFamily: 'Sora, sans-serif',
+        fontSize: '11px',
+        fontStyle: '700',
+        color,
+        stroke: '#071018',
+        strokeThickness: 3,
+      })
+      .setOrigin(0.5)
+      .setDepth(130000)
+      .setResolution(2);
+    this.tweens.add({
+      targets: label,
+      y: y - 14,
+      alpha: 0,
+      duration: 420,
+      onComplete: () => label.destroy(),
+    });
+  }
+
+  private tickReload(time: number): void {
+    if (!this.reloadUntil || time < this.reloadUntil) return;
+    const weapon = currentWeapon(this.state);
+    const timing = weaponTiming(weapon);
+    this.reloadUntil = 0;
+    if (weapon.ammo === 'none') return;
+    const pool = this.state.ammo[weapon.ammo];
+    const reload = Math.min(timing.clip || 1, pool);
+    this.state.ammo[weapon.ammo] -= reload;
+    this.state.clipLeft = reload;
+    if (time >= this.frozenUntil) this.state.combatNote = '';
+    this.pushChat(`Reloaded ${reload} ${weapon.ammo}.`);
+    playSfx(this, 'ui', 0.3);
+  }
+
+  private tickJob(time: number): void {
+    if (!this.jobWork) return;
+    const moved = Phaser.Math.Distance.Between(this.player.x, this.player.y, this.jobWork.originX, this.jobWork.originY);
+    if (moved > 22) {
+      this.pushChat('Stopped. Stay on the spot to finish the job.');
+      this.jobWork = null;
+      this.state.combatNote = '';
+      return;
+    }
+    if (time < this.jobWork.until) return;
+    const station = this.jobWork.station;
+    this.jobWork = null;
+    this.state.combatNote = '';
+    const wait = station.job === 'cars' ? 5200 : 3600;
+    this.jobReadyAt.set(station.id, time + wait);
+    if (station.job === 'trash') this.payJob('trash', 'trash', 8, 14, true);
+    else if (station.job === 'mining') this.payJob('mining', 'ore', 10, 16, true);
+    else if (!consumeItem(this.state, 'ore', 1)) this.pushChat('The ore was not in your pack.');
+    else this.payJob('cars', 'car_part', 22, 34, true);
+  }
+
+  private nearestStation(): { station: JobStation; dist: number } | null {
+    let best: { station: JobStation; dist: number } | null = null;
+    for (const station of this.world.jobStations) {
+      const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, station.x, station.y);
+      if (dist < 42 && (!best || dist < best.dist)) best = { station, dist };
+    }
+    return best;
+  }
+
+  private startJob(station: JobStation): void {
+    if (this.jobWork) return;
+    const ready = this.jobReadyAt.get(station.id) ?? 0;
+    if (this.time.now < ready) {
+      this.pushChat(`${station.label} is empty for a moment.`);
+      return;
+    }
+    if (station.job === 'cars') {
+      const ore = this.state.inventory.find((item) => item.id === 'ore')?.count ?? 0;
+      if (ore < 1) {
+        this.pushChat('Assembly needs 1 ore. Mine a vein in South Mines.');
+        return;
+      }
+    }
+    const ms = station.job === 'trash' ? 900 : station.job === 'mining' ? 1300 : 1700;
+    this.jobWork = { station, until: this.time.now + ms, originX: this.player.x, originY: this.player.y };
+    this.state.combatNote = station.job === 'trash' ? 'Picking up' : station.job === 'mining' ? 'Mining' : 'Assembling';
+    playSfx(this, 'job');
+    this.pushChat(`${station.label}. Stay still.`);
   }
 
   private handleHotkeys(): void {
@@ -802,6 +950,12 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private nearInteractLabel(): string {
+    const stationHit = this.nearestStation();
+    if (stationHit) {
+      if (stationHit.station.job === 'trash') return 'E — pick up trash (stay still)';
+      if (stationHit.station.job === 'mining') return 'E — mine ore (stay still)';
+      return 'E — assemble a car part (needs 1 ore)';
+    }
     const npc = this.nearestNpc();
     if (npc) return `E — ${npc.name} (${npc.role})`;
     const cell = tileAt(this.world, this.player.x, this.player.y);
@@ -835,7 +989,15 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private interact(): void {
+    const stationHit = this.nearestStation();
     const npc = this.nearestNpc();
+    const npcDist = npc
+      ? Phaser.Math.Distance.Between(this.player.x, this.player.y, npc.x * TILE, npc.y * TILE)
+      : 999;
+    if (stationHit && (!npc || stationHit.dist <= npcDist)) {
+      this.startJob(stationHit.station);
+      return;
+    }
     if (npc) {
       playSfx(this, 'chat');
       const line = npc.lines[Math.floor(Math.random() * npc.lines.length)];
@@ -1132,16 +1294,21 @@ export class WorldScene extends Phaser.Scene {
 
   private doJob(job: JobId, itemId: string, payMin: number, payMax: number): void {
     playSfx(this, 'job');
+    this.payJob(job, itemId, payMin, payMax, true);
+  }
+
+  private payJob(job: JobId, itemId: string, payMin: number, payMax: number, grantItem: boolean): void {
     const pay = Phaser.Math.Between(payMin, payMax) + this.state.jobLevel[job];
     this.state.gralats += pay;
-    addItem(this.state, itemId, 1);
+    if (grantItem) addItem(this.state, itemId, 1);
     const leveled = grantJobXp(this.state, job, 8);
-    this.pushChat(`Job ${job}: +${pay}g, +1 ${itemId}`);
+    this.pushChat(`Job ${job}: +${pay}g${grantItem ? `, +1 ${itemId}` : ''}`);
     if (leveled) {
       playSfx(this, 'levelup');
       this.pushChat(leveled);
     }
     playSfx(this, 'coin', 0.3);
+    saveGame(this.state);
   }
 
   private openWeaponShop(shop: WeaponDef['shop']): void {
@@ -1171,6 +1338,8 @@ export class WorldScene extends Phaser.Scene {
       this.pushChat(`Bought ${def.name} [${EFFECT_LABELS[def.effect]}]`);
     }
     this.pushChat(equipWeapon(this.state, id));
+    this.applyCustomization();
+    saveGame(this.state);
     playSfx(this, 'ui');
   }
 
@@ -1185,6 +1354,8 @@ export class WorldScene extends Phaser.Scene {
     const pick = window.prompt(`Owned weapons (equip by id):\n${owned}`, this.state.weapon);
     if (!pick) return;
     this.pushChat(equipWeapon(this.state, pick.trim().toLowerCase()));
+    this.applyCustomization();
+    saveGame(this.state);
   }
 
   private cycleOwnedWeapon(): void {
@@ -1192,6 +1363,7 @@ export class WorldScene extends Phaser.Scene {
     const idx = list.indexOf(this.state.weapon);
     const next = list[(idx + 1) % list.length];
     this.pushChat(equipWeapon(this.state, next));
+    this.applyCustomization();
     playSfx(this, 'ui');
   }
 
@@ -1265,6 +1437,8 @@ export class WorldScene extends Phaser.Scene {
       this.state.profile.hat = this.state.ownedHats.indexOf(id);
       playSfx(this, 'coin');
       this.pushChat(`Hat: ${id}`);
+      this.applyCustomization();
+      saveGame(this.state);
       return;
     }
     const outfit = window.prompt(`Outfits: ${this.state.ownedOutfits.join(', ')}\nBuy/equip street, formal, sport(350), tuxedo(700)`, 'sport');

@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { COLORS } from './config';
+import { generatePrettyTiles } from './sprites/tiles';
 
 function px(scene: Phaser.Scene, key: string, w: number, h: number, draw: (g: Phaser.GameObjects.Graphics) => void) {
   if (scene.textures.exists(key)) return;
@@ -10,7 +11,8 @@ function px(scene: Phaser.Scene, key: string, w: number, h: number, draw: (g: Ph
 }
 
 export function generateTextures(scene: Phaser.Scene): void {
-  px(scene, 'tile-grass', 32, 32, (g) => {
+  generatePrettyTiles(scene);
+  px(scene, 'tile-grass-legacy', 32, 32, (g) => {
     g.fillStyle(COLORS.grass, 1);
     g.fillRect(0, 0, 32, 32);
     g.fillStyle(COLORS.grassDark, 1);

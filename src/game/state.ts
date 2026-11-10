@@ -69,6 +69,8 @@ export interface GameState {
   altHealMode: boolean;
   achievements: string[];
   chatLog: string[];
+  /** Short combat readout: Reloading, Freeze, or a job. Not stored as progress. */
+  combatNote: string;
 }
 
 const JOBS: JobId[] = [
@@ -114,6 +116,7 @@ export function createInitialState(profile: PlayerProfile): GameState {
       { id: 'flower', name: 'Flower', count: 0 },
       { id: 'pizza', name: 'Pizza Box', count: 0 },
       { id: 'mail', name: 'Mail Bundle', count: 0 },
+      { id: 'car_part', name: 'Car Part', count: 0 },
       { id: 'petrol_bomb', name: 'Petrol Bomb', count: 2 },
       { id: 'smoke_grenade', name: 'Smoke Grenade', count: 2 },
     ],
@@ -141,6 +144,7 @@ export function createInitialState(profile: PlayerProfile): GameState {
     abilityReadyAt: 0,
     altHealMode: false,
     achievements: [],
+    combatNote: '',
     chatLog: [
       'System: Welcome to ProjectEra — you are in the Starter Area (safe plaza).',
       'System: Digging is at Mercy Beach / Southridge Beach — not here. Buy shovels at Shell Shack.',

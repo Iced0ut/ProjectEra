@@ -33,6 +33,14 @@ export interface WorldObjectSpec {
   label?: string;
 }
 
+export interface JobStation {
+  id: string;
+  job: 'trash' | 'mining' | 'cars';
+  x: number;
+  y: number;
+  label: string;
+}
+
 export interface WorldLabel {
   x: number;
   y: number;
@@ -48,6 +56,7 @@ export interface WorldData {
   mailDrop: { x: number; y: number };
   pizzaStation: { x: number; y: number };
   warpPads: { x: number; y: number; label: string; toX: number; toY: number }[];
+  jobStations: JobStation[];
 }
 
 function fillRect(
@@ -63,7 +72,7 @@ function fillRect(
   for (let y = y0; y < y0 + h; y++) {
     for (let x = x0; x < x0 + w; x++) {
       if (x < 0 || y < 0 || x >= MAP_W || y >= MAP_H) continue;
-      const region = opts.region ?? (y < 118 ? 'northridge' : y < 134 ? 'channel' : 'southridge');
+      const region = opts.region ?? (x >= 112 ? 'southridge' : x >= 96 ? 'channel' : 'northridge');
       cells[y][x] = {
         tile,
         blocked: !!opts.blocked,
@@ -96,23 +105,25 @@ export function createWorld(): WorldData {
   for (let y = 0; y < MAP_H; y++) {
     cells[y] = [];
     for (let x = 0; x < MAP_W; x++) {
-      const region = y < 118 ? 'northridge' : y < 134 ? 'channel' : 'southridge';
+      const region = x >= 112 ? 'southridge' : x >= 96 ? 'channel' : 'northridge';
       // Default: ocean everywhere, then stamp landmasses
       cells[y][x] = { tile: 'water', blocked: true, zone: 'wilderness', noPk: true, region };
     }
   }
 
-  // ---- Northridge landmass ----
-  fillRect(cells, 4, 4, 152, 112, 'grass', 'parkland', { region: 'northridge' });
+  // West island = Northridge, east island = Southridge, strip between = channel.
+  fillRect(cells, 1, 1, 94, 61, 'grass', 'parkland', { region: 'northridge' });
+  fillRect(cells, 112, 1, 34, 61, 'grass', 'southridge', { region: 'southridge' });
+  fillRect(cells, 96, 0, 16, MAP_H, 'water', 'bridge', { blocked: true, noPk: true, region: 'channel' });
+  fillRect(cells, 98, 24, 12, 14, 'bridge', 'bridge', { noPk: true, region: 'channel' });
+  fillRect(cells, 100, 26, 8, 10, 'road', 'bridge', { noPk: true, region: 'channel' });
+  fillRect(cells, 90, 28, 8, 6, 'road', 'harbour', { noPk: true, region: 'northridge' });
+  fillRect(cells, 110, 28, 8, 6, 'road', 'southridge', { noPk: true, region: 'southridge' });
 
-  // Major roads (Northridge grid)
-  fillRect(cells, 4, 66, 152, 4, 'road', 'downtown', { region: 'northridge' });
-  fillRect(cells, 4, 90, 152, 3, 'road', 'harbour', { region: 'northridge' });
-  fillRect(cells, 76, 4, 4, 112, 'road', 'downtown', { region: 'northridge' });
-  fillRect(cells, 40, 4, 3, 112, 'road', 'mercy_west', { region: 'northridge' });
-  fillRect(cells, 116, 4, 3, 112, 'road', 'mercy_east', { region: 'northridge' });
+  fillRect(cells, 2, 26, 92, 2, 'road', 'downtown', { region: 'northridge' });
+  fillRect(cells, 46, 2, 2, 52, 'road', 'downtown', { region: 'northridge' });
+  fillRect(cells, 112, 30, 34, 2, 'road', 'southridge', { region: 'southridge' });
 
-  // District paints
   paintDistrict(cells, 'parkland', 'grass');
   paintDistrict(cells, 'airport', 'sidewalk');
   paintDistrict(cells, 'snow_resort', 'snow');
@@ -130,10 +141,8 @@ export function createWorld(): WorldData {
   paintDistrict(cells, 'gun_row', 'path');
   paintDistrict(cells, 'car_row', 'path');
   paintDistrict(cells, 'downtown', 'safe');
-  // Starter Area: urban plaza (sidewalk + safe grass) — never sand/beach tiles
-  paintDistrict(cells, 'start_park', 'safe');
-  fillRect(cells, 70, 72, 20, 14, 'sidewalk', 'start_park', { noPk: true, region: 'northridge' });
-  fillRect(cells, 74, 75, 12, 8, 'safe', 'start_park', { noPk: true, region: 'northridge' });
+  paintDistrict(cells, 'start_park', 'sidewalk');
+  fillRect(cells, 48, 43, 12, 6, 'safe', 'start_park', { noPk: true, region: 'northridge' });
   paintDistrict(cells, 'auction', 'safe');
   paintDistrict(cells, 'bank', 'gang');
   paintDistrict(cells, 'mercy_west', 'safe');
@@ -143,21 +152,6 @@ export function createWorld(): WorldData {
   paintDistrict(cells, 'subway', 'path');
   paintDistrict(cells, 'harbour', 'path');
   paintDistrict(cells, 'mercy_beach', 'sand');
-  // Beach water edge
-  fillRect(cells, 8, 112, 40, 4, 'water', 'mercy_beach', { blocked: true, noPk: true, region: 'northridge' });
-
-  // ---- Channel / bridge ----
-  fillRect(cells, 0, 116, MAP_W, 18, 'water', 'bridge', { blocked: true, noPk: true, region: 'channel' });
-  // Bridge span
-  fillRect(cells, 74, 116, 12, 18, 'bridge', 'bridge', { noPk: true, region: 'channel' });
-  fillRect(cells, 76, 116, 8, 18, 'road', 'bridge', { noPk: true, region: 'channel' });
-
-  // ---- Southridge island ----
-  fillRect(cells, 18, 134, 124, 78, 'grass', 'southridge', { region: 'southridge' });
-  // South roads
-  fillRect(cells, 18, 158, 124, 3, 'road', 'southridge', { region: 'southridge' });
-  fillRect(cells, 78, 134, 3, 78, 'road', 'southridge', { region: 'southridge' });
-
   paintDistrict(cells, 'southridge', 'safe');
   paintDistrict(cells, 'south_hospital', 'safe');
   paintDistrict(cells, 'south_mines', 'mine');
@@ -166,102 +160,95 @@ export function createWorld(): WorldData {
   paintDistrict(cells, 'neo', 'gang');
   paintDistrict(cells, 'south_beach', 'sand');
   paintDistrict(cells, 'cave_coast', 'path');
-  fillRect(cells, 55, 198, 40, 8, 'water', 'south_beach', { blocked: true, noPk: true, region: 'southridge' });
-
-  // Re-stamp bridge ends onto land
-  fillRect(cells, 74, 110, 12, 8, 'road', 'harbour', { noPk: true, region: 'northridge' });
-  fillRect(cells, 74, 134, 12, 8, 'road', 'southridge', { noPk: true, region: 'southridge' });
 
   const objects: WorldObjectSpec[] = [];
   const addBuilding = (tx: number, ty: number, type: WorldObjectSpec['type'], label: string) => {
     objects.push({ type, x: tx * TILE, y: ty * TILE, label });
   };
 
-  // Northridge landmarks
-  addBuilding(78, 76, 'shop', 'Starter Area Kiosk');
-  addBuilding(64, 60, 'shop', 'Gun Point');
-  addBuilding(90, 58, 'shop', 'Fashion Mall');
-  addBuilding(104, 66, 'shop', 'Rico Motors');
-  addBuilding(72, 62, 'building', 'Era Hotel');
-  addBuilding(70, 82, 'building', "Speedy's Pizza");
-  addBuilding(84, 82, 'building', 'FoodMart');
-  addBuilding(60, 78, 'building', 'Police Station');
-  addBuilding(46, 80, 'building', 'Auction House');
-  addBuilding(90, 80, 'building', 'City Bank');
-  addBuilding(32, 74, 'building', 'Mercy West');
-  addBuilding(112, 74, 'building', 'Mercy East');
-  addBuilding(74, 42, 'building', 'Event House');
-  addBuilding(118, 46, 'building', 'Spar Complex');
-  addBuilding(16, 26, 'building', 'Airport Terminal');
-  addBuilding(120, 14, 'building', 'Snow Lodge');
-  addBuilding(24, 40, 'building', 'Water Park');
-  addBuilding(134, 74, 'building', 'Power Plant');
-  addBuilding(34, 52, 'building', 'Skate Arena');
-  addBuilding(14, 100, 'shop', 'Isra Shell Shack');
-  addBuilding(28, 102, 'shop', 'Bell Shell Shack');
-  addBuilding(10, 104, 'shop', "Wandi's Crab Shack");
-  addBuilding(18, 58, 'building', 'GZ Shop');
-  addBuilding(22, 88, 'building', 'BH Pizzeria');
-  addBuilding(124, 98, 'building', 'BBZ Mines');
-  addBuilding(14, 34, 'house', 'Player Starter Flat');
+  addBuilding(52, 44, 'shop', 'Starter Area Kiosk');
+  addBuilding(26, 44, 'shop', 'Gun Point');
+  addBuilding(48, 30, 'shop', 'Fashion Mall');
+  addBuilding(72, 42, 'shop', 'Rico Motors');
+  addBuilding(30, 30, 'building', 'Era Hotel');
+  addBuilding(50, 48, 'building', "Speedy's Pizza");
+  addBuilding(58, 48, 'building', 'FoodMart');
+  addBuilding(42, 44, 'building', 'Police Station');
+  addBuilding(6, 44, 'building', 'Auction House');
+  addBuilding(72, 57, 'building', 'City Bank');
+  addBuilding(6, 56, 'building', 'Mercy West');
+  addBuilding(74, 51, 'building', 'Mercy East');
+  addBuilding(68, 30, 'building', 'Event House');
+  addBuilding(6, 30, 'building', 'Spar Complex');
+  addBuilding(6, 4, 'building', 'Airport Terminal');
+  addBuilding(66, 4, 'building', 'Snow Lodge');
+  addBuilding(4, 16, 'building', 'Water Park');
+  addBuilding(86, 42, 'building', 'Power Plant');
+  addBuilding(24, 16, 'building', 'Skate Arena');
+  addBuilding(54, 56, 'shop', 'Isra Shell Shack');
+  addBuilding(60, 56, 'shop', 'Bell Shell Shack');
+  addBuilding(8, 58, 'shop', "Wandi's Crab Shack");
+  addBuilding(84, 30, 'building', 'GZ Shop');
+  addBuilding(24, 54, 'building', 'BH Pizzeria');
+  addBuilding(86, 52, 'building', 'BBZ Mines');
+  addBuilding(40, 30, 'house', 'Player Starter Flat');
+  addBuilding(130, 8, 'building', 'Southridge Hospital');
+  addBuilding(136, 10, 'building', 'Southridge Pizza');
+  addBuilding(114, 18, 'building', 'South Mines');
+  addBuilding(132, 18, 'building', 'Pirate Zone HQ');
+  addBuilding(114, 34, 'building', 'Guerre Base');
+  addBuilding(132, 34, 'building', 'Neo Base');
+  addBuilding(114, 6, 'building', 'Cave Entrance');
+  addBuilding(120, 52, 'shop', 'South Shell Counter');
 
-  // Southridge landmarks
-  addBuilding(78, 154, 'building', 'Southridge Hospital');
-  addBuilding(86, 156, 'building', 'Southridge Pizza');
-  addBuilding(36, 154, 'building', 'South Mines');
-  addBuilding(110, 158, 'building', 'Pirate Zone HQ');
-  addBuilding(46, 178, 'building', 'Guerre Base');
-  addBuilding(100, 178, 'building', 'Neo Base');
-  addBuilding(24, 180, 'building', 'Cave Entrance');
-  addBuilding(70, 188, 'shop', 'South Shell Counter');
-
-  // Light decor scatter (keep counts modest for load time)
-  for (let i = 0; i < 48; i++) {
-    const x = 6 + ((i * 37) % 148);
-    const y = 6 + ((i * 53) % 100);
-    if (cells[y][x].tile === 'grass') objects.push({ type: 'tree', x: x * TILE, y: y * TILE });
+  for (let i = 0; i < 40; i++) {
+    const x = 2 + ((i * 17) % 90);
+    const y = 2 + ((i * 13) % 58);
+    if (cells[y]?.[x]?.tile === 'grass') objects.push({ type: 'tree', x: x * TILE, y: y * TILE });
   }
-  for (let i = 0; i < 24; i++) {
-    const x = 25 + ((i * 19) % 100);
-    const y = 140 + ((i * 23) % 50);
+  for (let i = 0; i < 16; i++) {
+    const x = 114 + ((i * 5) % 28);
+    const y = 16 + ((i * 7) % 20);
     if (cells[y]?.[x]?.tile === 'grass' || cells[y]?.[x]?.tile === 'mine') {
       objects.push({ type: 'rock', x: x * TILE, y: y * TILE });
     }
   }
-  for (let i = 0; i < 12; i++) {
+  for (let i = 0; i < 8; i++) {
     objects.push({
       type: 'crate',
-      x: (50 + (i % 6) * 2) * TILE,
-      y: (58 + Math.floor(i / 6) * 2) * TILE,
+      x: (26 + (i % 4) * 2) * TILE,
+      y: (44 + Math.floor(i / 4) * 2) * TILE,
     });
   }
 
-  const labels: WorldLabel[] = DISTRICTS.map((d) => ({
-    x: (d.x + d.w / 2) * TILE,
-    y: (d.y + 1) * TILE,
-    text: d.name.toUpperCase(),
-    color: d.gangBase ? '#ff8a6a' : d.region === 'southridge' ? '#7ad0ff' : '#f0c14b',
-  }));
-  labels.push(
-    { x: 80 * TILE, y: 8 * TILE, text: 'NORTHRIDGE', color: '#3ecf8e' },
-    { x: 80 * TILE, y: 71 * TILE, text: 'STARTER AREA', color: '#3ecf8e' },
-    { x: 80 * TILE, y: 140 * TILE, text: 'SOUTHRIDGE ISLAND', color: '#7ad0ff' },
-    { x: 80 * TILE, y: 124 * TILE, text: 'BRIDGE', color: '#e8f0ff' },
-  );
+  const labels: WorldLabel[] = [
+    { x: 48 * TILE, y: 4 * TILE, text: 'NORTHRIDGE', color: '#3ecf8e' },
+    { x: 54 * TILE, y: 42 * TILE, text: 'STARTER AREA', color: '#3ecf8e' },
+    { x: 128 * TILE, y: 4 * TILE, text: 'SOUTHRIDGE', color: '#7ad0ff' },
+    { x: 104 * TILE, y: 24 * TILE, text: 'BRIDGE', color: '#e8f0ff' },
+  ];
 
   return {
     cells,
     objects,
     labels,
-    // Exact center of Starter Area plaza (never Mercy Beach / sand)
-    spawn: { x: 80 * TILE, y: 79 * TILE },
-    mailDrop: { x: 84 * TILE, y: 84 * TILE },
-    pizzaStation: { x: 72 * TILE, y: 84 * TILE },
+    spawn: { x: 54 * TILE, y: 46 * TILE },
+    mailDrop: { x: 58 * TILE, y: 46 * TILE },
+    pizzaStation: { x: 50 * TILE, y: 48 * TILE },
     warpPads: [
-      { x: 78, y: 94, label: 'Subway → Southridge', toX: 78, toY: 148 },
-      { x: 78, y: 148, label: 'Subway → Starter Area', toX: 80, toY: 79 },
-      { x: 20, y: 28, label: 'Airport Shuttle → Spar', toX: 120, toY: 50 },
-      { x: 120, y: 50, label: 'Spar Shuttle → Airport', toX: 20, toY: 28 },
+      { x: 50, y: 36, label: 'Subway → Southridge', toX: 132, toY: 12 },
+      { x: 132, y: 12, label: 'Subway → Starter Area', toX: 54, toY: 46 },
+      { x: 8, y: 6, label: 'Airport Shuttle → Spar', toX: 8, toY: 32 },
+      { x: 8, y: 32, label: 'Spar Shuttle → Airport', toX: 8, toY: 6 },
+    ],
+    jobStations: [
+      { id: 'trash-plaza', job: 'trash', x: 42 * TILE, y: 48 * TILE, label: 'Trash pile' },
+      { id: 'trash-downtown', job: 'trash', x: 62 * TILE, y: 46 * TILE, label: 'Trash pile' },
+      { id: 'trash-harbour', job: 'trash', x: 40 * TILE, y: 56 * TILE, label: 'Trash pile' },
+      { id: 'mine-a', job: 'mining', x: 116 * TILE, y: 20 * TILE, label: 'Ore vein' },
+      { id: 'mine-b', job: 'mining', x: 120 * TILE, y: 24 * TILE, label: 'Ore vein' },
+      { id: 'mine-c', job: 'mining', x: 114 * TILE, y: 22 * TILE, label: 'Ore vein' },
+      { id: 'garage', job: 'cars', x: 74 * TILE, y: 44 * TILE, label: 'Assembly bay' },
     ],
   };
 }

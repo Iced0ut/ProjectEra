@@ -65,8 +65,8 @@ export const CITY_NPCS: NpcDef[] = [
     y: 77,
     lines: [
       'You spawn in the Starter Area (safe plaza) — not the beach.',
-      'WASD move, Space attack, Q ability, E talk. Dig shells at Mercy Beach (southwest).',
-      'Southridge is across the bridge or subway pad.',
+      'WASD move, Space attack, Q ability, E talk. Dig shells on Mercy Beach, south shore.',
+      'Southridge is east across the bridge, or take the subway pad.',
     ],
   },
   {
@@ -346,33 +346,73 @@ export const CITY_NPCS: NpcDef[] = [
 ];
 
 export const AMBIENT_CITIZEN_SPOTS: { x: number; y: number; name: string }[] = [
-  // Northridge crowd
-  { x: 74, y: 76, name: 'Jay' },
-  { x: 80, y: 80, name: 'Nia' },
-  { x: 70, y: 72, name: 'Oz' },
-  { x: 86, y: 74, name: 'Quin' },
-  { x: 64, y: 70, name: 'Rae' },
-  { x: 94, y: 70, name: 'Sky' },
-  { x: 100, y: 78, name: 'Tess' },
-  { x: 56, y: 76, name: 'Uma' },
-  { x: 48, y: 64, name: 'Vic' },
-  { x: 110, y: 64, name: 'Wes' },
-  { x: 34, y: 78, name: 'Ash' },
-  { x: 118, y: 78, name: 'Bea' },
-  { x: 22, y: 30, name: 'Cid' },
-  { x: 124, y: 18, name: 'Dot' },
-  { x: 36, y: 54, name: 'Eli' },
-  { x: 18, y: 108, name: 'Flo' },
-  { x: 50, y: 104, name: 'Gus' },
-  // Southridge crowd
-  { x: 74, y: 156, name: 'Hana' },
-  { x: 82, y: 160, name: 'Ivo' },
-  { x: 66, y: 162, name: 'Jules' },
-  { x: 90, y: 170, name: 'Kira' },
-  { x: 58, y: 188, name: 'Lex' },
-  { x: 40, y: 160, name: 'Moe' },
-  { x: 108, y: 168, name: 'Nyx' },
+  { x: 50, y: 44, name: 'Jay' },
+  { x: 56, y: 45, name: 'Nia' },
+  { x: 48, y: 47, name: 'Oz' },
+  { x: 58, y: 44, name: 'Quin' },
+  { x: 44, y: 43, name: 'Rae' },
+  { x: 62, y: 46, name: 'Sky' },
+  { x: 30, y: 44, name: 'Tess' },
+  { x: 8, y: 44, name: 'Uma' },
+  { x: 32, y: 30, name: 'Vic' },
+  { x: 48, y: 30, name: 'Wes' },
+  { x: 6, y: 16, name: 'Ash' },
+  { x: 66, y: 6, name: 'Bea' },
+  { x: 8, y: 6, name: 'Cid' },
+  { x: 128, y: 8, name: 'Dot' },
+  { x: 26, y: 16, name: 'Eli' },
+  { x: 8, y: 56, name: 'Flo' },
+  { x: 56, y: 56, name: 'Gus' },
+  { x: 130, y: 10, name: 'Hana' },
+  { x: 136, y: 12, name: 'Ivo' },
+  { x: 116, y: 20, name: 'Jules' },
+  { x: 134, y: 20, name: 'Kira' },
+  { x: 118, y: 36, name: 'Lex' },
+  { x: 134, y: 36, name: 'Moe' },
+  { x: 120, y: 52, name: 'Nyx' },
 ];
+
+const NPC_SPOTS: Record<string, [number, number]> = {
+  guide_g: [54, 45],
+  vendor_vee: [28, 44],
+  simon_melee: [30, 45],
+  exotic_aria: [32, 44],
+  job_bot: [56, 46],
+  officer_lane: [44, 45],
+  car_dealer: [74, 43],
+  fashion_faye: [48, 31],
+  hat_hiro: [52, 31],
+  mailman_mo: [58, 46],
+  pizza_pat: [52, 48],
+  spar_host: [8, 32],
+  event_announcer: [68, 31],
+  warp_subway_n: [50, 36],
+  israfel_shells: [54, 56],
+  bell_shells: [60, 56],
+  wandi_crabs: [10, 58],
+  beach_bri: [58, 57],
+  capo_gz: [86, 32],
+  capo_tachi: [76, 18],
+  capo_bh: [26, 55],
+  capo_bbz: [86, 54],
+  south_guide: [128, 6],
+  south_pizza: [136, 10],
+  south_shells: [122, 52],
+  mine_foreman: [116, 20],
+  pirate_boss: [134, 20],
+  guerre_boss: [116, 36],
+  neo_boss: [134, 36],
+  cave_keeper: [114, 6],
+  warp_subway_s: [132, 12],
+};
+
+for (const npc of CITY_NPCS) {
+  const spot = NPC_SPOTS[npc.id];
+  if (spot) {
+    npc.x = spot[0];
+    npc.y = spot[1];
+  }
+}
 
 export function createCityBots(): BotDef[] {
   const bots: BotDef[] = [];
@@ -387,8 +427,8 @@ export function createCityBots(): BotDef[] {
     add({
       kind: 'spar_bot',
       name: `Spar Bot ${i + 1}`,
-      x: 112 + (i % 6) * 3,
-      y: 44 + Math.floor(i / 6) * 5,
+      x: 6 + (i % 6) * 2,
+      y: 30 + Math.floor(i / 6) * 3,
       hp: 50,
       speed: 70,
       damage: 5,
@@ -404,8 +444,8 @@ export function createCityBots(): BotDef[] {
     add({
       kind: 'street_rival',
       name: `Rival ${i + 1}`,
-      x: 10 + (i * 8) % 140,
-      y: 66 + (i % 3),
+      x: 8 + (i * 5) % 80,
+      y: 26 + (i % 2),
       hp: 40,
       speed: 85,
       damage: 6,
@@ -418,12 +458,12 @@ export function createCityBots(): BotDef[] {
 
   // Gang enforcers at north bases
   const bases = [
-    { x: 12, y: 58, name: 'GZ' },
-    { x: 134, y: 34, name: 'Tachi' },
-    { x: 24, y: 88, name: 'BH' },
-    { x: 124, y: 98, name: 'BBZ' },
-    { x: 98, y: 32, name: 'Lethal' },
-    { x: 44, y: 32, name: 'Mafia' },
+    { x: 84, y: 32, name: 'GZ' },
+    { x: 74, y: 18, name: 'Tachi' },
+    { x: 24, y: 54, name: 'BH' },
+    { x: 86, y: 52, name: 'BBZ' },
+    { x: 56, y: 18, name: 'Lethal' },
+    { x: 40, y: 18, name: 'Mafia' },
   ];
   bases.forEach((b, bi) => {
     for (let i = 0; i < 3; i++) {
@@ -449,8 +489,8 @@ export function createCityBots(): BotDef[] {
     add({
       kind: 'beach_crab',
       name: `Mercy Crab ${i + 1}`,
-      x: 10 + (i % 10) * 3,
-      y: 100 + Math.floor(i / 10) * 4,
+      x: 54 + (i % 6) * 2,
+      y: 55 + Math.floor(i / 6),
       hp: 18,
       speed: 55,
       damage: 3,
@@ -466,8 +506,8 @@ export function createCityBots(): BotDef[] {
     add({
       kind: 'beach_crab',
       name: `South Crab ${i + 1}`,
-      x: 58 + i * 3,
-      y: 190,
+      x: 116 + i * 3,
+      y: 52,
       hp: 18,
       speed: 55,
       damage: 3,
@@ -483,8 +523,8 @@ export function createCityBots(): BotDef[] {
     add({
       kind: 'police_bot',
       name: `Patrol ${i + 1}`,
-      x: 60 + i * 5,
-      y: 72 + (i % 2),
+      x: 42 + i * 2,
+      y: 44 + (i % 2),
       hp: 60,
       speed: 95,
       damage: 6,
@@ -500,8 +540,8 @@ export function createCityBots(): BotDef[] {
     add({
       kind: 'gang_enforcer',
       name: `Pirate Guard ${i + 1}`,
-      x: 108 + (i % 3) * 3,
-      y: 158 + Math.floor(i / 3) * 4,
+      x: 132 + (i % 3) * 2,
+      y: 18 + Math.floor(i / 3) * 3,
       hp: 55,
       speed: 88,
       damage: 7,
@@ -515,8 +555,8 @@ export function createCityBots(): BotDef[] {
     add({
       kind: 'gang_enforcer',
       name: `Guerre Guard ${i + 1}`,
-      x: 42 + i * 2,
-      y: 178,
+      x: 114 + i * 2,
+      y: 36,
       hp: 55,
       speed: 88,
       damage: 7,
@@ -530,8 +570,8 @@ export function createCityBots(): BotDef[] {
     add({
       kind: 'gang_enforcer',
       name: `Neo Guard ${i + 1}`,
-      x: 98 + i * 2,
-      y: 178,
+      x: 132 + i * 2,
+      y: 36,
       hp: 55,
       speed: 88,
       damage: 7,
@@ -547,8 +587,8 @@ export function createCityBots(): BotDef[] {
     add({
       kind: 'mine_pest',
       name: `Mine Pest ${i + 1}`,
-      x: 32 + (i % 5) * 3,
-      y: 152 + Math.floor(i / 5) * 4,
+      x: 114 + (i % 5) * 2,
+      y: 18 + Math.floor(i / 5) * 3,
       hp: 25,
       speed: 60,
       damage: 4,
@@ -564,8 +604,8 @@ export function createCityBots(): BotDef[] {
     add({
       kind: 'training_dummy',
       name: `Dummy ${i + 1}`,
-      x: 64 + i * 2,
-      y: 68,
+      x: 26 + i * 2,
+      y: 46,
       hp: 999,
       speed: 0,
       damage: 0,
@@ -581,8 +621,8 @@ export function createCityBots(): BotDef[] {
     add({
       kind: 'event_bot',
       name: `Arena Bot ${i + 1}`,
-      x: 72 + (i % 3) * 3,
-      y: 42 + Math.floor(i / 3) * 3,
+      x: 66 + (i % 3) * 2,
+      y: 30 + Math.floor(i / 3) * 2,
       hp: 45,
       speed: 80,
       damage: 5,

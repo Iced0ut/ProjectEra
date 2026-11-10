@@ -9,6 +9,7 @@ export interface ActorLook {
   pants: number;
   hat: number;
   skin?: number;
+  held?: 'none' | 'melee' | 'gun' | 'staff';
 }
 
 const HAIR = ['#2b2118', '#6b3a1f', '#d7b15a', '#111111', '#8d2448', '#ece7df'];
@@ -122,10 +123,11 @@ function stamp(
     put(12, 28, '#2a211c', 8, 2);
   }
 
-  // torso + arms
+  // torso + arms, with a light stripe so shirts aren't flat blocks
   put(11, 14, shirt, 10, 9);
   put(8, 15, shirt, 3, 7);
   put(21, 15, shirt, 3, 7);
+  put(12, 15, 'rgba(255,255,255,0.22)', 2, 6);
   put(11, 14, OUTLINE, 10, 1);
   put(8, 15, skin, 2, 2);
   put(22, 15, skin, 2, 2);
@@ -138,6 +140,7 @@ function stamp(
 
   if (facing === 'down') {
     put(12, 5, hair, 8, 3);
+    put(13, 6, 'rgba(255,255,255,0.28)', 2, 1);
     put(13, 9, '#1a120e', 2, 2);
     put(17, 9, '#1a120e', 2, 2);
     put(15, 12, '#c47878', 2, 1);
@@ -150,6 +153,31 @@ function stamp(
   }
 
   drawHat(put, look.hat, facing);
+  drawHeld(put, look.held ?? 'none', facing);
+}
+
+function drawHeld(
+  put: (x: number, y: number, c: string, w?: number, h?: number) => void,
+  held: 'none' | 'melee' | 'gun' | 'staff',
+  facing: 'down' | 'right' | 'up',
+): void {
+  if (held === 'none') return;
+  if (held === 'melee') {
+    put(22, 8, '#6b4428', 2, 14);
+    put(21, 7, '#d7dbe2', 4, 2);
+    return;
+  }
+  if (held === 'staff') {
+    put(23, 4, '#6a4a78', 2, 20);
+    put(22, 4, '#e2b84a', 4, 2);
+    return;
+  }
+  if (facing === 'up') {
+    put(8, 16, '#2a2e33', 6, 3);
+    return;
+  }
+  put(22, 16, '#2a2e33', 8, 3);
+  put(29, 17, '#e2b84a', 2, 1);
 }
 
 function drawHat(
@@ -180,5 +208,5 @@ function drawHat(
 }
 
 export function actorKeyFor(prefix: string, look: ActorLook): string {
-  return `${prefix}-h${look.hair}-s${look.shirt}-p${look.pants}-t${look.hat}-k${look.skin ?? 0}`;
+  return `${prefix}-h${look.hair}-s${look.shirt}-p${look.pants}-t${look.hat}-k${look.skin ?? 0}-w${look.held ?? 'none'}`;
 }
