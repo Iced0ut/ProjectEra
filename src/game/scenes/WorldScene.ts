@@ -71,6 +71,7 @@ import { createWorld, districtNameAt, resolveStart, tileAt, type JobStation, typ
 import { playMusic, playSfx } from '../audio';
 import { DISTRICTS } from '../content/districts';
 import { actorKeyFor, paintActorSheet, playActorAnim, type ActorLook } from '../sprites/characters';
+import { ensureMuzzleTexture, muzzleAnchor, poseForWeapon, poseRow, type PosePhase } from '../sprites/weaponPoses';
 import { freshBotMind, thinkBot, type BotMind } from '../ai/botBrain';
 
 interface BotSprite extends Phaser.Physics.Arcade.Sprite {
@@ -121,6 +122,19 @@ export class WorldScene extends Phaser.Scene {
   private recentKills: number[] = [];
   private instanceLeft = 0;
   private instanceReward: InstanceDef | null = null;
+  private poseKind: 'none' | 'fire' | 'melee' | 'dry' | 'draw' = 'none';
+  private poseStarted = 0;
+  private poseDuration = 140;
+  private poseDir: Dir = 'down';
+  private dualHand = 0;
+  private meleeHitDone = false;
+  private pendingMelee: WeaponDef | null = null;
+  private muzzle?: Phaser.GameObjects.Image;
+  private muzzleHideAt = 0;
+  private suppressFireUntil = 0;
+  private posePreview = false;
+  private previewSprites: Phaser.GameObjects.Image[] = [];
+  private previewText?: Phaser.GameObjects.Text;
   private doors: { x: number; y: number; label: string; kind: InteriorKind }[] = [];
   private inside: {
     title: string;
@@ -226,7 +240,7 @@ export class WorldScene extends Phaser.Scene {
     if (!this.input.keyboard) throw new Error('Keyboard required');
     this.cursors = this.input.keyboard.createCursorKeys();
     this.keys = this.input.keyboard.addKeys(
-      'W,A,S,D,E,Q,SHIFT,SPACE,ONE,TWO,C,I,H,G,M,B,V,R,U,TAB',
+      'W,A,S,D,E,Q,SHIFT,SPACE,ONE,TWO,C,I,H,G,M,B,V,R,U,TAB,F',
     ) as Record<string, Phaser.Input.Keyboard.Key>;
 
     this.drawDistrictLabels();
@@ -241,6 +255,13 @@ export class WorldScene extends Phaser.Scene {
     this.pushChat('Gold mats are doors. E enters that building as its own 64×64 level.');
     this.pushChat('Cave Entrance is the Sea Dungeon. Event House runs Plasma waves. Job Bot shows daily challenges.');
     ensureChallenges(this.state);
+    ensureMuzzleTexture(this);
+    this.game.events.on('hidden', this.onAppHidden, this);
+    this.game.events.on('visible', this.onAppVisible, this);
+    this.events.once('shutdown', () => {
+      this.game.events.off('hidden', this.onAppHidden, this);
+      this.game.events.off('visible', this.onAppVisible, this);
+    });
   }
 
   update(time: number, delta = 16): void {
@@ -248,6 +269,8 @@ export class WorldScene extends Phaser.Scene {
     const dt = delta / 1000;
     this.handleMovement(time);
     this.handleCombat(time);
+    this.tickMeleeWindow(time);
+    this.syncMuzzle(time);
     this.handleHotkeys();
     this.updateBots(time, dt);
     this.updateCitizens(time);
@@ -495,12 +518,14 @@ export class WorldScene extends Phaser.Scene {
       hat: this.state.profile.hat,
       skin: 0,
       held: heldStyle(currentWeapon(this.state)),
+      pose: poseForWeapon(currentWeapon(this.state)),
     };
     this.actorKey = this.sheetFor('player', look);
     this.player.setTexture(this.actorKey, 0);
+    this.player.anims.stop();
     this.player.clearTint();
     this.player.setDisplaySize(32, 32);
-    playActorAnim(this.player, this.actorKey, this.dir, false);
+    if (!look.pose) playActorAnim(this.player, this.actorKey, this.dir, false);
   }
 
   private handleMovement(time: number): void {
@@ -548,7 +573,7 @@ export class WorldScene extends Phaser.Scene {
     }
     body.setVelocity(vx * speed, vy * speed);
     if (!this.state.profile.customSkinDataUrl) {
-      playActorAnim(this.player, this.actorKey, this.dir, vx !== 0 || vy !== 0);
+      this.showPlayerPose(time, vx !== 0 || vy !== 0);
     }
 
     const cell = this.footCell(this.player.x, this.player.y);
@@ -559,11 +584,124 @@ export class WorldScene extends Phaser.Scene {
     }
   }
 
+  private showPlayerPose(time: number, moving: boolean): void {
+    const weapon = currentWeapon(this.state);
+    const pose = poseForWeapon(weapon);
+    const facing = this.pendingMelee ? this.poseDir : this.dir;
+    let phase: PosePhase = moving ? 'walk' : 'idle';
+    if (this.reloadUntil > time) phase = 'reload';
+    else if (this.poseKind !== 'none' && time < this.poseStarted + this.poseDuration) {
+      const along = (time - this.poseStarted) / this.poseDuration;
+      if (pose.pattern === 'alternate') phase = this.dualHand % 2 === 0 ? 'strike' : 'windup';
+      else phase = along < 0.3 ? 'windup' : along < 0.65 ? 'strike' : 'recover';
+    } else if (this.poseKind !== 'none' && time >= this.poseStarted + this.poseDuration) {
+      this.poseKind = 'none';
+    }
+    const col = { down: 0, left: 1, right: 2, up: 3 }[facing];
+    const frame = col + poseRow(phase) * 4;
+    this.player.anims.stop();
+    if (this.player.frame.name !== String(frame)) this.player.setFrame(frame);
+    this.syncPosePreview(pose.id, phase);
+  }
+
+  private tickMeleeWindow(time: number): void {
+    const weapon = this.pendingMelee;
+    if (!weapon) return;
+    const along = (time - this.poseStarted) / this.poseDuration;
+    if (!this.meleeHitDone && along >= 0.34 && along <= 0.7) {
+      this.meleeHitDone = true;
+      const aim = DIR_VEC[this.poseDir];
+      const hx = this.player.x + aim.x * 22;
+      const hy = this.player.y + aim.y * 16;
+      this.bots.getChildren().forEach((obj) => {
+        const enemy = obj as BotSprite;
+        if (!enemy.active || enemy.hp <= 0) return;
+        if (Phaser.Math.Distance.Between(hx, hy, enemy.x, enemy.y) <= weapon.range) {
+          this.damageBot(enemy, weapon, time);
+        }
+      });
+    }
+    if (along >= 1) this.pendingMelee = null;
+  }
+
+  private segmentClear(x0: number, y0: number, x1: number, y1: number): boolean {
+    const steps = 4;
+    for (let i = 1; i <= steps; i++) {
+      const x = x0 + ((x1 - x0) * i) / steps;
+      const y = y0 + ((y1 - y0) * i) / steps;
+      const cell = tileAt(this.world, x, y);
+      if (cell?.blocked) return false;
+    }
+    return true;
+  }
+
+  private flashMuzzle(x: number, y: number, time: number): void {
+    if (!this.muzzle) {
+      this.muzzle = this.add.image(x, y, 'muzzle-flash').setVisible(false);
+    }
+    this.muzzle.setPosition(x, y).setVisible(true).setDepth(this.player.y + 1);
+    this.muzzleHideAt = time + 45;
+  }
+
+  private syncMuzzle(time: number): void {
+    if (this.muzzle?.visible && time >= this.muzzleHideAt) this.muzzle.setVisible(false);
+  }
+
+  private onAppHidden(): void {
+    this.input.keyboard?.resetKeys();
+  }
+
+  private onAppVisible(): void {
+    this.input.keyboard?.resetKeys();
+    this.suppressFireUntil = this.time.now + 200;
+  }
+
+  private cancelWeaponMotion(): void {
+    this.reloadUntil = 0;
+    this.pendingMelee = null;
+    this.meleeHitDone = false;
+    this.poseKind = 'draw';
+    this.poseStarted = this.time.now;
+    this.poseDuration = 160;
+    this.poseDir = this.dir;
+    if (this.muzzle) this.muzzle.setVisible(false);
+  }
+
+  private syncPosePreview(profile: string, phase: PosePhase): void {
+    if (!this.posePreview) {
+      this.previewSprites.forEach((sprite) => sprite.setVisible(false));
+      this.previewText?.setVisible(false);
+      return;
+    }
+    const labels: Dir[] = ['down', 'left', 'right', 'up'];
+    if (this.previewSprites.length === 0) {
+      labels.forEach(() => {
+        const image = this.add.image(0, 0, this.actorKey, 0).setScrollFactor(0).setDepth(300000).setDisplaySize(48, 48);
+        this.previewSprites.push(image);
+      });
+      this.previewText = this.add
+        .text(12, 8, '', { fontFamily: 'Sora, sans-serif', fontSize: '13px', color: '#f4f7fb' })
+        .setScrollFactor(0)
+        .setDepth(300001)
+        .setResolution(2);
+    }
+    labels.forEach((facing, index) => {
+      const col = { down: 0, left: 1, right: 2, up: 3 }[facing];
+      const image = this.previewSprites[index];
+      image.setTexture(this.actorKey, col + poseRow('idle') * 4);
+      image.setVisible(true);
+      image.setPosition(28 + index * 52, 56);
+    });
+    this.previewText?.setVisible(true);
+    this.previewText?.setText(`${currentWeapon(this.state).name} · ${profile} · ${phase} · F hides`);
+  }
+
   private handleCombat(time: number): void {
     if (Phaser.Input.Keyboard.JustDown(this.keys.Q)) {
       this.useWeaponAbility(time);
       return;
     }
+    if (time < this.suppressFireUntil) return;
     if (!Phaser.Input.Keyboard.JustDown(this.keys.SPACE) && !Phaser.Input.Keyboard.JustDown(this.cursors.space!)) {
       return;
     }
@@ -589,11 +727,13 @@ export class WorldScene extends Phaser.Scene {
     this.frozenUntil = time + timing.freezeMs;
     if (timing.freezeMs >= 60) this.state.combatNote = 'Freeze';
     playSfx(this, 'swing', 0.4);
-    const v = DIR_VEC[this.dir];
-    const slash = this.add.image(this.player.x + v.x * 28, this.player.y + v.y * 28, 'slash');
-    slash.setDepth(this.player.depth + 1);
-    slash.setRotation(Math.atan2(v.y, v.x));
-    this.tweens.add({ targets: slash, alpha: 0, duration: 140, onComplete: () => slash.destroy() });
+    const pose = poseForWeapon(weapon);
+    this.poseKind = 'melee';
+    this.poseStarted = time;
+    this.poseDuration = pose.visualMs;
+    this.poseDir = this.dir;
+    this.pendingMelee = weapon;
+    this.meleeHitDone = false;
 
     if (weapon.effect === 'heal' || (weapon.ability === 'alt_heal' && this.state.altHealMode)) {
       const heal = weapon.healAmount ?? weapon.effectPower;
@@ -601,13 +741,6 @@ export class WorldScene extends Phaser.Scene {
       playSfx(this, 'heal');
       this.pushChat(`Healed +${heal}`);
     }
-
-    this.bots.getChildren().forEach((obj) => {
-      const enemy = obj as BotSprite;
-      if (!enemy.active || enemy.hp <= 0) return;
-      const dist = Phaser.Math.Distance.Between(slash.x, slash.y, enemy.x, enemy.y);
-      if (dist <= weapon.range) this.damageBot(enemy, weapon, time);
-    });
   }
 
   private doGun(weapon: WeaponDef, time: number): void {
@@ -620,6 +753,10 @@ export class WorldScene extends Phaser.Scene {
       if (this.state.clipLeft <= 0) {
         const pool = this.state.ammo[weapon.ammo];
         if (pool <= 0) {
+          this.poseKind = 'dry';
+          this.poseStarted = time;
+          this.poseDuration = 90;
+          this.poseDir = this.dir;
           this.pushChat('Out of ammo.');
           playSfx(this, 'ui');
           return;
@@ -644,15 +781,29 @@ export class WorldScene extends Phaser.Scene {
       return;
     }
 
+    const pose = poseForWeapon(weapon);
+    this.poseKind = 'fire';
+    this.poseStarted = time;
+    this.poseDuration = pose.visualMs;
+    this.poseDir = this.dir;
+    if (pose.pattern === 'alternate') this.dualHand += 1;
+    const anchor = muzzleAnchor(pose, this.dir);
+    const mx = this.player.x + (anchor.x - 16);
+    const my = this.player.y + (anchor.y - 16);
+    if (!this.segmentClear(this.player.x, this.player.y, mx, my)) {
+      this.pushChat('The muzzle is against a wall.');
+      return;
+    }
     playSfx(this, 'shoot', 0.35);
+    this.flashMuzzle(mx, my, time);
     const pellets = weapon.pellets ?? 1;
     const spread = timing.spread;
     const speed = timing.projectileSpeed || 420;
     const base = Math.atan2(DIR_VEC[this.dir].y, DIR_VEC[this.dir].x);
     for (let i = 0; i < pellets; i++) {
       const angle = base + (pellets === 1 ? 0 : -spread + (spread * 2 * i) / Math.max(1, pellets - 1));
-      const bullet = this.bullets.create(this.player.x, this.player.y, 'bullet') as Phaser.Physics.Arcade.Sprite;
-      bullet.setDepth(2000);
+      const bullet = this.bullets.create(mx, my, 'bullet') as Phaser.Physics.Arcade.Sprite;
+      bullet.setDepth(this.player.y + 1);
       bullet.setData('weaponId', weapon.id);
       bullet.setData('damage', weaponDamage(weapon, this.state.clipLeft + 1, this.state.altHealMode));
       bullet.setData('graze', timing.grazeDamage);
@@ -1039,6 +1190,9 @@ export class WorldScene extends Phaser.Scene {
     this.player.setPosition(this.world.spawn.x, this.world.spawn.y);
     this.playerStatus = createStatus();
     this.player.setData('iframes', this.time.now + 2000);
+    this.pendingMelee = null;
+    this.poseKind = 'none';
+    if (this.muzzle) this.muzzle.setVisible(false);
     this.pushChat('Knocked out. No gralats or items lost. Spawn protection for 2s at the Starter Area.');
   }
 
@@ -1155,6 +1309,7 @@ export class WorldScene extends Phaser.Scene {
     if (Phaser.Input.Keyboard.JustDown(this.keys.R)) this.cycleMorph();
     if (Phaser.Input.Keyboard.JustDown(this.keys.U)) this.uploadSkin();
     if (Phaser.Input.Keyboard.JustDown(this.keys.TAB)) this.weaponBrowser();
+    if (Phaser.Input.Keyboard.JustDown(this.keys.F)) this.posePreview = !this.posePreview;
     if (Phaser.Input.Keyboard.JustDown(this.keys.M)) {
       if (this.sound.locked) this.sound.unlock();
       playMusic(this, 'theme_city', 0.26);
@@ -1786,6 +1941,7 @@ export class WorldScene extends Phaser.Scene {
       playSfx(this, 'coin');
       this.pushChat(`Bought ${def.name} [${EFFECT_LABELS[def.effect]}]`);
     }
+    this.cancelWeaponMotion();
     this.pushChat(equipWeapon(this.state, id));
     this.applyCustomization();
     saveGame(this.state);
@@ -1802,6 +1958,7 @@ export class WorldScene extends Phaser.Scene {
       .join('\n');
     const pick = window.prompt(`Owned weapons (equip by id):\n${owned}`, this.state.weapon);
     if (!pick) return;
+    this.cancelWeaponMotion();
     this.pushChat(equipWeapon(this.state, pick.trim().toLowerCase()));
     this.applyCustomization();
     saveGame(this.state);
@@ -1811,6 +1968,7 @@ export class WorldScene extends Phaser.Scene {
     const list = this.state.ownedWeapons;
     const idx = list.indexOf(this.state.weapon);
     const next = list[(idx + 1) % list.length];
+    this.cancelWeaponMotion();
     this.pushChat(equipWeapon(this.state, next));
     this.applyCustomization();
     playSfx(this, 'ui');

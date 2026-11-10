@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import type { Dir } from '../config';
+import { drawPose, type PosePhase, type WeaponPose } from './weaponPoses';
 
 /** Original layered pixel people (head / body / hat). Not copied from any Era client. */
 
@@ -10,6 +11,7 @@ export interface ActorLook {
   hat: number;
   skin?: number;
   held?: 'none' | 'melee' | 'gun' | 'staff';
+  pose?: WeaponPose;
 }
 
 const HAIR = ['#2b2118', '#6b3a1f', '#d7b15a', '#111111', '#8d2448', '#ece7df'];
@@ -31,15 +33,19 @@ export function paintActorSheet(scene: Phaser.Scene, key: string, look: ActorLoo
   }
   const fw = 32;
   const fh = 32;
+  const phases: PosePhase[] = look.pose
+    ? ['idle', 'walk', 'windup', 'strike', 'recover', 'reload']
+    : ['idle', 'walk'];
   const canvas = document.createElement('canvas');
   canvas.width = fw * 4;
-  canvas.height = fh * 2;
+  canvas.height = fh * phases.length;
   const ctx = canvas.getContext('2d');
   if (!ctx) return key;
   ctx.imageSmoothingEnabled = false;
-  FACINGS.forEach((facing, col) => {
-    drawFrame(ctx, col * fw, 0, facing, 0, look);
-    drawFrame(ctx, col * fw, fh, facing, 1, look);
+  phases.forEach((phase, row) => {
+    FACINGS.forEach((facing, col) => {
+      drawFrame(ctx, col * fw, row * fh, facing, phase === 'walk' ? 1 : 0, look, phase);
+    });
   });
   scene.textures.addSpriteSheet(key, canvas as unknown as HTMLImageElement, { frameWidth: fw, frameHeight: fh });
   ensureAnims(scene, key);
@@ -80,15 +86,16 @@ function drawFrame(
   facing: Dir,
   step: number,
   look: ActorLook,
+  phase: PosePhase,
 ): void {
   ctx.save();
   if (facing === 'left') {
     ctx.translate(ox + 32, oy);
     ctx.scale(-1, 1);
-    stamp(ctx, 0, 0, 'right', step, look);
+    stamp(ctx, 0, 0, 'right', step, look, phase);
   } else {
     const side: 'down' | 'right' | 'up' = facing === 'up' ? 'up' : facing === 'right' ? 'right' : 'down';
-    stamp(ctx, ox, oy, side, step, look);
+    stamp(ctx, ox, oy, side, step, look, phase);
   }
   ctx.restore();
 }
@@ -100,6 +107,7 @@ function stamp(
   facing: 'down' | 'right' | 'up',
   step: number,
   look: ActorLook,
+  phase: PosePhase,
 ): void {
   const skin = hex(look.skin ?? 0, SKIN);
   const hair = hex(look.hair, HAIR);
@@ -126,14 +134,17 @@ function stamp(
     put(12, 28, '#2a211c', 8, 2);
   }
 
-  // torso + arms, with a light stripe so shirts aren't flat blocks
   put(11, 14, shirt, 10, 9);
-  put(8, 15, shirt, 3, 7);
-  put(21, 15, shirt, 3, 7);
   put(12, 15, 'rgba(255,255,255,0.22)', 2, 6);
   put(11, 14, OUTLINE, 10, 1);
-  put(8, 15, skin, 2, 2);
-  put(22, 15, skin, 2, 2);
+  if (!look.pose) {
+    put(8, 15, shirt, 3, 7);
+    put(21, 15, shirt, 3, 7);
+    put(8, 15, skin, 2, 2);
+    put(22, 15, skin, 2, 2);
+  } else if (facing === 'up') {
+    drawPose(put, facing, phase, look.pose, skin);
+  }
 
   // head
   put(11, 5, skin, 10, 9);
@@ -156,7 +167,8 @@ function stamp(
   }
 
   drawHat(put, look.hat, facing);
-  drawHeld(put, look.held ?? 'none', facing);
+  if (look.pose && facing !== 'up') drawPose(put, facing, phase, look.pose, skin);
+  else if (!look.pose) drawHeld(put, look.held ?? 'none', facing);
 }
 
 function drawHeld(
@@ -211,5 +223,5 @@ function drawHat(
 }
 
 export function actorKeyFor(prefix: string, look: ActorLook): string {
-  return `${prefix}-h${look.hair}-s${look.shirt}-p${look.pants}-t${look.hat}-k${look.skin ?? 0}-w${look.held ?? 'none'}`;
+  return `${prefix}-h${look.hair}-s${look.shirt}-p${look.pants}-t${look.hat}-k${look.skin ?? 0}-w${look.pose?.id ?? look.held ?? 'none'}`;
 }
