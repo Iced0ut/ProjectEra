@@ -130,8 +130,10 @@ export function createWorld(): WorldData {
   paintDistrict(cells, 'gun_row', 'path');
   paintDistrict(cells, 'car_row', 'path');
   paintDistrict(cells, 'downtown', 'safe');
+  // Starter Area: urban plaza (sidewalk + safe grass) — never sand/beach tiles
   paintDistrict(cells, 'start_park', 'safe');
-  fillRect(cells, 72, 74, 16, 10, 'path', 'start_park', { noPk: true, region: 'northridge' });
+  fillRect(cells, 70, 72, 20, 14, 'sidewalk', 'start_park', { noPk: true, region: 'northridge' });
+  fillRect(cells, 74, 75, 12, 8, 'safe', 'start_park', { noPk: true, region: 'northridge' });
   paintDistrict(cells, 'auction', 'safe');
   paintDistrict(cells, 'bank', 'gang');
   paintDistrict(cells, 'mercy_west', 'safe');
@@ -176,7 +178,7 @@ export function createWorld(): WorldData {
   };
 
   // Northridge landmarks
-  addBuilding(78, 76, 'shop', 'Start Park Kiosk');
+  addBuilding(78, 76, 'shop', 'Starter Area Kiosk');
   addBuilding(64, 60, 'shop', 'Gun Point');
   addBuilding(90, 58, 'shop', 'Fashion Mall');
   addBuilding(104, 66, 'shop', 'Rico Motors');
@@ -242,6 +244,7 @@ export function createWorld(): WorldData {
   }));
   labels.push(
     { x: 80 * TILE, y: 8 * TILE, text: 'NORTHRIDGE', color: '#3ecf8e' },
+    { x: 80 * TILE, y: 71 * TILE, text: 'STARTER AREA', color: '#3ecf8e' },
     { x: 80 * TILE, y: 140 * TILE, text: 'SOUTHRIDGE ISLAND', color: '#7ad0ff' },
     { x: 80 * TILE, y: 124 * TILE, text: 'BRIDGE', color: '#e8f0ff' },
   );
@@ -250,12 +253,13 @@ export function createWorld(): WorldData {
     cells,
     objects,
     labels,
-    spawn: { x: 78 * TILE, y: 78 * TILE }, // Start Park
+    // Exact center of Starter Area plaza (never Mercy Beach / sand)
+    spawn: { x: 80 * TILE, y: 79 * TILE },
     mailDrop: { x: 84 * TILE, y: 84 * TILE },
     pizzaStation: { x: 72 * TILE, y: 84 * TILE },
     warpPads: [
       { x: 78, y: 94, label: 'Subway → Southridge', toX: 78, toY: 148 },
-      { x: 78, y: 148, label: 'Subway → Start Park', toX: 78, toY: 78 },
+      { x: 78, y: 148, label: 'Subway → Starter Area', toX: 80, toY: 79 },
       { x: 20, y: 28, label: 'Airport Shuttle → Spar', toX: 120, toY: 50 },
       { x: 120, y: 50, label: 'Spar Shuttle → Airport', toX: 20, toY: 28 },
     ],

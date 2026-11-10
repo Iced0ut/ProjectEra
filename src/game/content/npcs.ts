@@ -61,12 +61,12 @@ export const CITY_NPCS: NpcDef[] = [
     id: 'guide_g',
     name: 'Guide G',
     role: 'guide',
-    x: 78,
-    y: 78,
+    x: 80,
+    y: 77,
     lines: [
-      'Welcome to Northridge. Southridge is across the bridge or subway pad.',
-      'WASD move, Space attack, Q ability, E talk. Dig at Mercy Beach.',
-      'Gang bases: GZ, Tachi, BH, BBZ, Lethal, Mafia up north — Pirate, Guerre, Neo down south.',
+      'You spawn in the Starter Area (safe plaza) — not the beach.',
+      'WASD move, Space attack, Q ability, E talk. Dig shells at Mercy Beach (southwest).',
+      'Southridge is across the bridge or subway pad.',
     ],
   },
   {

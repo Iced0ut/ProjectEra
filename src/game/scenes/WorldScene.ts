@@ -159,9 +159,9 @@ export class WorldScene extends Phaser.Scene {
 
     playMusic(this, 'theme_city', 0.26);
     this.game.events.emit('era-state', this.state);
-    this.pushChat(`Northridge + Southridge online (${MAP_W}x${MAP_H} tiles, ${DISTRICTS.length} districts).`);
+    this.pushChat(`Spawned at Starter Area · ${DISTRICTS.length} districts · ${MAP_W}x${MAP_H} tiles.`);
     this.pushChat(`${CITY_NPCS.length} NPCs · ${AMBIENT_CITIZEN_SPOTS.length} citizens · ${createCityBots().length} bots.`);
-    this.pushChat('Cross the bridge south of harbour, or E on Subway Pad N/S to warp.');
+    this.pushChat('Mercy Beach is southwest for digging. Bridge/subway leads to Southridge.');
   }
 
   update(time: number, delta = 16): void {
@@ -732,7 +732,7 @@ export class WorldScene extends Phaser.Scene {
     this.state.hp = this.state.maxHp;
     this.player.setPosition(this.world.spawn.x, this.world.spawn.y);
     this.playerStatus = createStatus();
-    this.pushChat('Knocked out — respawned in the plaza.');
+    this.pushChat('Knocked out — respawned at the Starter Area.');
   }
 
   private bulletHit(bullet: Phaser.Physics.Arcade.Sprite, enemy: BotSprite): void {
@@ -1348,9 +1348,12 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private spawnJobPickups(): void {
+    // Keep flower/mushroom pickups out of Starter Area and beaches
     for (let i = 0; i < 24; i++) {
       const x = (8 + Math.random() * 50) * TILE;
       const y = (8 + Math.random() * 40) * TILE;
+      const cell = tileAt(this.world, x, y);
+      if (!cell || cell.tile === 'sand' || cell.zone === 'start_park' || cell.zone === 'mercy_beach') continue;
       const p = this.pickups.create(x, y, 'pickup') as Phaser.Physics.Arcade.Sprite;
       p.setData('kind', Math.random() > 0.5 ? 'mushroom' : 'flower');
     }

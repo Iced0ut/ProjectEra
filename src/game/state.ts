@@ -142,9 +142,9 @@ export function createInitialState(profile: PlayerProfile): GameState {
     altHealMode: false,
     achievements: [],
     chatLog: [
-      'System: Welcome to ProjectEra — original city sandbox inspired by Era systems.',
-      'System: Digging: buy shovels at Shell Shack, dig sand for Trochus & more, sell at the counter.',
-      'System: Crabs can spawn while digging — kill them for crab shells (6g each).',
+      'System: Welcome to ProjectEra — you are in the Starter Area (safe plaza).',
+      'System: Digging is at Mercy Beach / Southridge Beach — not here. Buy shovels at Shell Shack.',
+      'System: Trochus is the most common shell; crabs can spawn while digging.',
     ],
   };
 }

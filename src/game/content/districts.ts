@@ -58,7 +58,7 @@ export interface DistrictDef {
  */
 export const DISTRICTS: DistrictDef[] = [
   // ---- Northridge core ----
-  { id: 'start_park', name: 'Start Park', region: 'northridge', x: 68, y: 70, w: 24, h: 18, noPk: true, blurb: 'Spawn plaza — safe hub.' },
+  { id: 'start_park', name: 'Starter Area', region: 'northridge', x: 68, y: 70, w: 24, h: 18, noPk: true, blurb: 'Player spawn plaza — safe hub (not the beach).' },
   { id: 'downtown', name: 'Downtown', region: 'northridge', x: 60, y: 55, w: 40, h: 40, noPk: true, blurb: 'Shops, FoodMart, police.' },
   { id: 'hotel_row', name: 'Era Hotel Row', region: 'northridge', x: 55, y: 48, w: 20, h: 12, noPk: true, blurb: 'Hotels and Astro Bar.' },
   { id: 'fashion_mall', name: 'Fashion Mall', region: 'northridge', x: 82, y: 48, w: 22, h: 14, noPk: true, blurb: 'Hats, bodies, clothing.' },
