@@ -1279,12 +1279,27 @@ export class WorldScene extends Phaser.Scene {
     const objects: Phaser.GameObjects.GameObject[] = [];
     objects.push(this.add.image(ox, oy, key).setOrigin(0, 0).setDepth(0));
     for (const prop of level.props) {
-      objects.push(
-        this.add
-          .image(ox + prop.tx * TILE + 8, oy + prop.ty * TILE + 8, prop.key)
-          .setDepth(oy + prop.ty * TILE)
-          .setDisplaySize(28, 22),
-      );
+      const px = ox + prop.tx * TILE + 8;
+      const py = oy + prop.ty * TILE + 8;
+      if (this.textures.exists(prop.key)) {
+        objects.push(this.add.image(px, py, prop.key).setDepth(py).setDisplaySize(26, 20));
+      }
+      if (prop.label) {
+        objects.push(
+          this.add
+            .text(px, py - 18, prop.label, {
+              fontFamily: 'Sora, sans-serif',
+              fontSize: '11px',
+              fontStyle: '600',
+              color: '#f4f7fb',
+              stroke: '#1a120e',
+              strokeThickness: 3,
+            })
+            .setOrigin(0.5)
+            .setDepth(py + 30)
+            .setResolution(2),
+        );
+      }
     }
     objects.push(
       this.add
