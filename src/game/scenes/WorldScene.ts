@@ -78,12 +78,10 @@ export class WorldScene extends Phaser.Scene {
   private citizens!: Phaser.Physics.Arcade.Group;
   private npcSprites: { sprite: Phaser.Physics.Arcade.Image; def: NpcDef }[] = [];
   private nameTag!: Phaser.GameObjects.Text;
-  private zoneText!: Phaser.GameObjects.Text;
-  private interactHint!: Phaser.GameObjects.Text;
-  private effectText!: Phaser.GameObjects.Text;
   private playerStatus = createStatus();
   private digReady = 0;
   private digSerial = 0;
+  private hudTick = 0;
 
   constructor() {
     super('world');
@@ -116,48 +114,16 @@ export class WorldScene extends Phaser.Scene {
 
     this.nameTag = this.add
       .text(this.player.x, this.player.y - 28, this.state.profile.name, {
-        fontFamily: 'VT323, monospace',
-        fontSize: '18px',
-        color: '#e8f0ff',
-        stroke: '#000',
-        strokeThickness: 3,
+        fontFamily: 'Sora, sans-serif',
+        fontSize: '13px',
+        fontStyle: '600',
+        color: '#eef4ff',
+        stroke: '#071018',
+        strokeThickness: 4,
       })
       .setOrigin(0.5)
-      .setDepth(1001);
-
-    this.zoneText = this.add
-      .text(12, 12, '', {
-        fontFamily: 'VT323, monospace',
-        fontSize: '22px',
-        color: '#f0c14b',
-        backgroundColor: '#00000088',
-        padding: { x: 8, y: 4 },
-      })
-      .setScrollFactor(0)
-      .setDepth(3000);
-
-    this.interactHint = this.add
-      .text(this.scale.width / 2, this.scale.height - 28, '', {
-        fontFamily: 'VT323, monospace',
-        fontSize: '20px',
-        color: '#3ecf8e',
-        backgroundColor: '#00000088',
-        padding: { x: 8, y: 4 },
-      })
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(3000);
-
-    this.effectText = this.add
-      .text(12, 172, '', {
-        fontFamily: 'VT323, monospace',
-        fontSize: '18px',
-        color: '#ffb4a0',
-        backgroundColor: '#00000066',
-        padding: { x: 6, y: 2 },
-      })
-      .setScrollFactor(0)
-      .setDepth(3000);
+      .setDepth(1001)
+      .setResolution(2);
 
     this.spawnNpcs();
     this.spawnCitizens();
@@ -196,7 +162,7 @@ export class WorldScene extends Phaser.Scene {
     this.pushChat('Cross the bridge south of harbour, or E on Subway Pad N/S to warp.');
   }
 
-  update(time: number, delta: number): void {
+  update(time: number, delta = 16): void {
     if (!this.player?.active) return;
     const dt = delta / 1000;
     this.handleMovement(time);
@@ -208,18 +174,18 @@ export class WorldScene extends Phaser.Scene {
     this.nameTag.setPosition(this.player.x, this.player.y - 28);
     this.player.setDepth(this.player.y);
 
-    const cell = tileAt(this.world, this.player.x, this.player.y);
-    if (cell) {
-      const pk = cell.noPk ? 'NO-PK' : 'PK';
-      const place = districtNameAt(this.world, this.player.x, this.player.y);
-      this.zoneText.setText(`${cell.region.toUpperCase()} · ${place}  [${pk}]`);
+    this.hudTick += delta;
+    if (this.hudTick >= 100) {
+      this.hudTick = 0;
+      const cell = tileAt(this.world, this.player.x, this.player.y);
+      if (cell) {
+        const pk = cell.noPk ? 'NO-PK' : 'PK';
+        const place = districtNameAt(this.world, this.player.x, this.player.y);
+        this.game.events.emit('era-region', `${cell.region} · ${place} · ${pk}`);
+      }
+      this.game.events.emit('era-hint', this.nearInteractLabel());
+      this.game.events.emit('era-state', this.state);
     }
-    this.interactHint.setText(this.nearInteractLabel());
-    const wpn = currentWeapon(this.state);
-    this.effectText.setText(
-      `${wpn.name} | ${EFFECT_LABELS[wpn.effect]} | ${wpn.abilityLabel}${this.state.altHealMode ? ' [HEAL MODE]' : ''}`,
-    );
-    this.game.events.emit('era-state', this.state);
   }
 
   private spawnNpcs(): void {
@@ -230,14 +196,16 @@ export class WorldScene extends Phaser.Scene {
       sprite.setDepth(npc.y * TILE);
       this.add
         .text(npc.x * TILE, npc.y * TILE - 26, npc.name, {
-          fontFamily: 'VT323, monospace',
-          fontSize: '16px',
+          fontFamily: 'Sora, sans-serif',
+          fontSize: '11px',
+          fontStyle: '600',
           color: '#f0c14b',
-          stroke: '#000',
-          strokeThickness: 2,
+          stroke: '#071018',
+          strokeThickness: 3,
         })
         .setOrigin(0.5)
-        .setDepth(npc.y * TILE + 1);
+        .setDepth(npc.y * TILE + 1)
+        .setResolution(2);
       this.npcSprites.push({ sprite, def: npc });
     }
   }
@@ -254,14 +222,16 @@ export class WorldScene extends Phaser.Scene {
       spr.setSize(16, 12).setOffset(4, 18);
       this.add
         .text(c.x * TILE, c.y * TILE - 22, c.name, {
-          fontFamily: 'VT323, monospace',
-          fontSize: '14px',
+          fontFamily: 'Sora, sans-serif',
+          fontSize: '10px',
+          fontStyle: '500',
           color: '#cfe0ff',
-          stroke: '#000',
-          strokeThickness: 2,
+          stroke: '#071018',
+          strokeThickness: 3,
         })
         .setOrigin(0.5)
         .setDepth(c.y * TILE + 1)
+        .setResolution(2)
         .setName(`citizen_label_${c.name}`);
     }
   }
@@ -318,15 +288,17 @@ export class WorldScene extends Phaser.Scene {
     for (const label of this.world.labels) {
       this.add
         .text(label.x, label.y, label.text, {
-          fontFamily: 'VT323, monospace',
-          fontSize: label.text.includes('RIDGE') ? '28px' : '16px',
+          fontFamily: 'Sora, sans-serif',
+          fontSize: label.text.includes('RIDGE') ? '22px' : '12px',
+          fontStyle: '700',
           color: label.color,
-          stroke: '#000000',
-          strokeThickness: 4,
+          stroke: '#071018',
+          strokeThickness: 5,
         })
         .setOrigin(0.5, 0)
         .setDepth(5)
-        .setAlpha(0.85);
+        .setAlpha(0.8)
+        .setResolution(2);
     }
   }
 
@@ -338,14 +310,16 @@ export class WorldScene extends Phaser.Scene {
       this.add.circle(cx, cy, 8, 0x88cfff, 0.8).setDepth(7);
       this.add
         .text(cx, cy - 22, pad.label, {
-          fontFamily: 'VT323, monospace',
-          fontSize: '14px',
+          fontFamily: 'Sora, sans-serif',
+          fontSize: '11px',
+          fontStyle: '600',
           color: '#cfe0ff',
-          stroke: '#000',
-          strokeThickness: 3,
+          stroke: '#071018',
+          strokeThickness: 4,
         })
         .setOrigin(0.5)
-        .setDepth(8);
+        .setDepth(8)
+        .setResolution(2);
     }
   }
 
