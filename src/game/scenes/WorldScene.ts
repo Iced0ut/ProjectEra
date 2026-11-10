@@ -46,6 +46,7 @@ import {
 import { createWorld, districtNameAt, tileAt, type WorldData } from '../world';
 import { playMusic, playSfx } from '../audio';
 import { DISTRICTS } from '../content/districts';
+import { actorKeyFor, paintActorSheet, playActorAnim, type ActorLook } from '../sprites/characters';
 
 interface BotSprite extends Phaser.Physics.Arcade.Sprite {
   bot: BotDef;
@@ -82,6 +83,7 @@ export class WorldScene extends Phaser.Scene {
   private digReady = 0;
   private digSerial = 0;
   private hudTick = 0;
+  private actorKey = 'actor-player';
 
   constructor() {
     super('world');
@@ -111,7 +113,7 @@ export class WorldScene extends Phaser.Scene {
     this.player = this.physics.add.sprite(this.world.spawn.x, this.world.spawn.y, 'player');
     this.player.setCollideWorldBounds(true);
     this.player.setDepth(1000);
-    this.player.setSize(16, 12).setOffset(4, 18);
+    this.player.setSize(14, 10).setOffset(9, 18);
     this.applyCustomization();
 
     this.nameTag = this.add
@@ -193,8 +195,8 @@ export class WorldScene extends Phaser.Scene {
   private spawnNpcs(): void {
     this.npcSprites = [];
     for (const npc of CITY_NPCS) {
-      const sprite = this.physics.add.staticImage(npc.x * TILE, npc.y * TILE, 'npc');
-      if (npc.tint) sprite.setTint(npc.tint);
+      const key = this.sheetFor(`${npc.id}`, this.lookFromSeed(npc.id.length + npc.x, npc.role === 'police' ? 1 : 0));
+      const sprite = this.physics.add.staticImage(npc.x * TILE, npc.y * TILE, key, 0);
       sprite.setDepth(npc.y * TILE);
       this.add
         .text(npc.x * TILE, npc.y * TILE - 26, npc.name, {
@@ -215,12 +217,13 @@ export class WorldScene extends Phaser.Scene {
   private spawnCitizens(): void {
     this.citizens = this.physics.add.group();
     for (const c of AMBIENT_CITIZEN_SPOTS) {
-      const spr = this.citizens.create(c.x * TILE, c.y * TILE, 'npc') as CitizenSprite;
+      const key = this.sheetFor(c.name, this.lookFromSeed(c.x + c.y, 2));
+      const spr = this.citizens.create(c.x * TILE, c.y * TILE, key, 0) as CitizenSprite;
       spr.homeX = c.x * TILE;
       spr.homeY = c.y * TILE;
       spr.wanderAt = 0;
-      spr.setTint(Phaser.Display.Color.GetColor(120 + ((c.x * 17) % 100), 140 + ((c.y * 13) % 80), 160));
       spr.setDepth(c.y * TILE);
+      spr.setDisplaySize(32, 32);
       spr.setSize(16, 12).setOffset(4, 18);
       this.add
         .text(c.x * TILE, c.y * TILE - 22, c.name, {
@@ -246,15 +249,24 @@ export class WorldScene extends Phaser.Scene {
 
   private createBotSprite(bot: BotDef): BotSprite {
     const key =
-      bot.kind === 'beach_crab' ? 'crab' : bot.kind === 'training_dummy' ? 'crate' : 'enemy';
-    const spr = this.bots.create(bot.x * TILE, bot.y * TILE, key) as BotSprite;
+      bot.kind === 'beach_crab'
+        ? 'crab'
+        : bot.kind === 'training_dummy'
+          ? 'crate'
+          : this.sheetFor(bot.id, this.lookFromSeed(bot.name.length, bot.kind === 'police_bot' ? 1 : 3));
+    const spr = this.bots.create(bot.x * TILE, bot.y * TILE, key, 0) as BotSprite;
     spr.bot = bot;
     spr.hp = bot.hp;
     spr.status = createStatus();
     spr.deadUntil = 0;
     spr.setDepth(bot.y * TILE);
-    if (bot.tint) spr.setTint(bot.tint);
-    if (key === 'enemy' || key === 'crab') spr.setSize(16, 12).setOffset(4, 6);
+    if (key === 'crab' || key === 'crate') {
+      if (bot.tint) spr.setTint(bot.tint);
+      spr.setSize(16, 12).setOffset(4, 6);
+    } else {
+      spr.setDisplaySize(32, 32);
+      spr.setSize(14, 10).setOffset(9, 18);
+    }
     spr.setData('label', bot.name);
     return spr;
   }
@@ -329,16 +341,39 @@ export class WorldScene extends Phaser.Scene {
     }
   }
 
+  private lookFromSeed(seed: number, shirtBias: number): ActorLook {
+    return {
+      hair: Math.abs(seed) % 6,
+      shirt: Math.abs(seed + shirtBias) % 6,
+      pants: Math.abs(seed * 3) % 6,
+      hat: Math.abs(seed * 5) % 6,
+      skin: Math.abs(seed * 7) % 4,
+    };
+  }
+
+  private sheetFor(id: string, look: ActorLook): string {
+    return paintActorSheet(this, actorKeyFor(id.replace(/\s+/g, '-'), look), look);
+  }
+
   private applyCustomization(): void {
     if (this.state.profile.customSkinDataUrl && this.textures.exists('custom-skin')) {
+      this.player.anims.stop();
       this.player.setTexture('custom-skin');
+      this.player.setDisplaySize(32, 32);
       return;
     }
-    const tint =
-      0x100000 * (8 + this.state.profile.shirt) +
-      0x001000 * (8 + this.state.profile.pants) +
-      0x000010 * (8 + this.state.profile.hair);
-    this.player.setTint(tint);
+    const look: ActorLook = {
+      hair: this.state.profile.hair,
+      shirt: this.state.profile.shirt,
+      pants: this.state.profile.pants,
+      hat: this.state.profile.hat,
+      skin: 0,
+    };
+    this.actorKey = this.sheetFor('player', look);
+    this.player.setTexture(this.actorKey, 0);
+    this.player.clearTint();
+    this.player.setDisplaySize(32, 32);
+    playActorAnim(this.player, this.actorKey, this.dir, false);
   }
 
   private handleMovement(time: number): void {
@@ -376,6 +411,9 @@ export class WorldScene extends Phaser.Scene {
       vy *= Math.SQRT1_2;
     }
     body.setVelocity(vx * speed, vy * speed);
+    if (!this.state.profile.customSkinDataUrl) {
+      playActorAnim(this.player, this.actorKey, this.dir, vx !== 0 || vy !== 0);
+    }
 
     const cell = tileAt(this.world, this.player.x, this.player.y);
     if (cell?.blocked) {
