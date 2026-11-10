@@ -71,6 +71,14 @@ export interface GameState {
   chatLog: string[];
   /** Short combat readout: Reloading, Freeze, or a job. Not stored as progress. */
   combatNote: string;
+  killStreak: number;
+  dailyStamp: string;
+  dailyChallenges: { id: string; label: string; goal: number; progress: number; reward: number; claimed: boolean }[];
+  challengesClaimed: number;
+  seaCoins: number;
+  plasmaCoins: number;
+  gangCoins: number;
+  bankPaidAt: number;
 }
 
 const JOBS: JobId[] = [
@@ -110,6 +118,10 @@ export function createInitialState(profile: PlayerProfile): GameState {
       { id: 'crab_shell_red', name: 'Red Crab Shell', count: 0 },
       { id: 'crab_shell_yellow', name: 'Yellow Crab Shell', count: 0 },
       { id: 'ore', name: 'Ore', count: 0 },
+      { id: 'rock', name: 'Rock', count: 0 },
+      { id: 'iron', name: 'Iron', count: 0 },
+      { id: 'gold', name: 'Gold', count: 0 },
+      { id: 'diamond', name: 'Diamond', count: 0 },
       { id: 'fish', name: 'Fish', count: 0 },
       { id: 'trash', name: 'Trash Bag', count: 0 },
       { id: 'mushroom', name: 'Mushroom', count: 0 },
@@ -145,6 +157,14 @@ export function createInitialState(profile: PlayerProfile): GameState {
     altHealMode: false,
     achievements: [],
     combatNote: '',
+    killStreak: 0,
+    dailyStamp: '',
+    dailyChallenges: [],
+    challengesClaimed: 0,
+    seaCoins: 0,
+    plasmaCoins: 0,
+    gangCoins: 0,
+    bankPaidAt: 0,
     chatLog: [
       'System: Welcome to ProjectEra — you are in the Starter Area (safe plaza).',
       'System: Digging is at Mercy Beach / Southridge Beach — not here. Buy shovels at Shell Shack.',

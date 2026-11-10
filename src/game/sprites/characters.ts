@@ -25,7 +25,10 @@ function hex(n: number, list: string[]): string {
 }
 
 export function paintActorSheet(scene: Phaser.Scene, key: string, look: ActorLook): string {
-  if (scene.textures.exists(key)) scene.textures.remove(key);
+  if (scene.textures.exists(key)) {
+    ensureAnims(scene, key);
+    return key;
+  }
   const fw = 32;
   const fh = 32;
   const canvas = document.createElement('canvas');

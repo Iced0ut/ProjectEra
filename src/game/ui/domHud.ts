@@ -35,6 +35,8 @@ function fireEnter(): void {
   const btn = el<HTMLButtonElement>('enter-city');
   btn.disabled = true;
   btn.textContent = 'Loading city…';
+  document.body.classList.remove('title-open');
+  el('title-ui').classList.add('hidden');
   // Let the browser paint the loading state before heavy world creation
   requestAnimationFrame(() => {
     window.setTimeout(() => {

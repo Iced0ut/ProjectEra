@@ -26,7 +26,11 @@ export type OnHitEffect =
   | 'knockback'
   | 'heal'
   | 'explode'
-  | 'shield';
+  | 'shield'
+  | 'bleed'
+  | 'confusion'
+  | 'antiheal'
+  | 'gravity';
 
 export type WeaponAbility =
   | 'none'
@@ -118,7 +122,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
   bamboo_rod: w({
     id: 'bamboo_rod', name: 'Bamboo Rod', family: 'melee', kind: 'melee',
     damage: 8, range: 50, cooldown: 260, ammo: 'none',
-    ability: 'none', abilityLabel: 'Push Wave', effect: 'knockback', effectPower: 260,
+    ability: 'none', abilityLabel: 'Push Wave', effect: 'confusion', effectPower: 5000,
     cost: 3500, shop: 'event',
   }),
   golden_knuckles: w({
@@ -160,7 +164,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
   scimitar: w({
     id: 'scimitar', name: 'Desert Scimitar', family: 'melee', kind: 'melee',
     damage: 9, range: 44, cooldown: 240, ammo: 'none',
-    ability: 'none', abilityLabel: 'Arc Slash', effect: 'none', effectPower: 0,
+    ability: 'none', abilityLabel: 'Arc Slash', effect: 'gravity', effectPower: 3000,
     cost: 6500, shop: 'melee',
   }),
   brass_lighter: w({
@@ -184,7 +188,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
   ghurka_dagger: w({
     id: 'ghurka_dagger', name: 'Ghurka Dagger', family: 'melee', kind: 'melee',
     damage: 10, range: 36, cooldown: 200, ammo: 'none',
-    ability: 'roll', abilityLabel: 'Quick Step', effect: 'none', effectPower: 0,
+    ability: 'roll', abilityLabel: 'Quick Step', effect: 'bleed', effectPower: 3,
     cost: 10000, shop: 'melee',
   }),
   ninja_hammer: w({
@@ -219,13 +223,13 @@ export const WEAPONS: Record<string, WeaponDef> = {
   }),
   magma_axe: w({
     id: 'magma_axe', name: 'Magma Axe', family: 'melee', kind: 'melee',
-    damage: 10, range: 44, cooldown: 320, ammo: 'none',
+    damage: 8, range: 44, cooldown: 320, ammo: 'none',
     ability: 'none', abilityLabel: 'Molten Cleaver', effect: 'burn', effectPower: 4,
     cost: 12000, shop: 'melee',
   }),
   dreaded_axe: w({
     id: 'dreaded_axe', name: 'Dreaded Bloody Axe', family: 'melee', kind: 'melee',
-    damage: 8, damageMax: 10, range: 44, cooldown: 300, ammo: 'none',
+    damage: 7, damageMax: 10, range: 44, cooldown: 300, ammo: 'none',
     ability: 'none', abilityLabel: 'Blood Cleaver', effect: 'lifesteal', effectPower: 3,
     cost: 14000, shop: 'exotic',
   }),
@@ -295,7 +299,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
   }),
   gold_smg: w({
     id: 'gold_smg', name: 'Gold SMG', family: 'smg', kind: 'gun',
-    damage: 9, range: 210, cooldown: 90, clip: 20, ammo: 'smg',
+    damage: 11.5, range: 210, cooldown: 90, clip: 20, ammo: 'smg',
     ability: 'spray', abilityLabel: 'Spray', effect: 'none', effectPower: 0,
     cost: 4200, shop: 'guns',
   }),
@@ -327,7 +331,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
   // ---- Shotguns / Snipers / Launchers ----
   auto_shotgun: w({
     id: 'auto_shotgun', name: 'Auto Shotgun', family: 'shotgun', kind: 'gun',
-    damage: 9.5, range: 140, cooldown: 220, clip: 12, pellets: 3, spread: 0.25, ammo: 'shotgun',
+    damage: 9.5, range: 140, cooldown: 220, clip: 36, pellets: 3, spread: 0.25, ammo: 'shotgun',
     ability: 'none', abilityLabel: 'Pellet Storm', effect: 'knockback', effectPower: 200,
     cost: 6500, shop: 'guns',
   }),
@@ -351,19 +355,19 @@ export const WEAPONS: Record<string, WeaponDef> = {
   }),
   antimatter_sniper: w({
     id: 'antimatter_sniper', name: 'Anti-Matter Sniper', family: 'sniper', kind: 'gun',
-    damage: 18, range: 500, cooldown: 780, clip: 4, ammo: 'special',
+    damage: 12, range: 500, cooldown: 780, clip: 4, ammo: 'rifle',
     ability: 'none', abilityLabel: 'Pierce Burst', effect: 'explode', effectPower: 40,
     cost: 22000, shop: 'exotic',
   }),
   grenade_launcher: w({
     id: 'grenade_launcher', name: 'Grenade Launcher', family: 'launcher', kind: 'gun',
-    damage: 10, range: 260, cooldown: 500, clip: 6, ammo: 'special',
+    damage: 6, range: 260, cooldown: 500, clip: 6, ammo: 'special',
     ability: 'none', abilityLabel: 'Arc Bomb', effect: 'explode', effectPower: 56,
     cost: 15000, shop: 'guns',
   }),
   artillery_cannon: w({
     id: 'artillery_cannon', name: 'Artillery Cannon', family: 'launcher', kind: 'gun',
-    damage: 14, range: 300, cooldown: 900, clip: 2, ammo: 'special',
+    damage: 9, range: 300, cooldown: 900, clip: 2, ammo: 'special',
     ability: 'none', abilityLabel: 'Barrage', effect: 'explode', effectPower: 72,
     cost: 25000, shop: 'exotic',
   }),
@@ -371,7 +375,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
   // ---- Staffs / Exotics ----
   ice_mage_staff: w({
     id: 'ice_mage_staff', name: 'Ice Mage Staff', family: 'staff', kind: 'gun',
-    damage: 8, damageMax: 10, healAmount: 6, range: 240, cooldown: 300, clip: 12, ammo: 'special',
+    damage: 10, damageMax: 10, healAmount: 6, range: 240, cooldown: 300, clip: 12, ammo: 'special',
     ability: 'alt_heal', abilityLabel: 'Heal Beam / Frost', effect: 'heal', effectPower: 6,
     cost: 16000, shop: 'exotic',
   }),
@@ -383,7 +387,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
   }),
   vanquisher: w({
     id: 'vanquisher', name: 'Vanquisher', family: 'exotic', kind: 'gun',
-    damage: 8, damageMax: 14, range: 260, cooldown: 150, clip: 20, ammo: 'special',
+    damage: 4, damageMax: 14, range: 260, cooldown: 150, clip: 20, ammo: 'special',
     ability: 'mode_switch', abilityLabel: 'Mode Switch x3', effect: 'shock', effectPower: 4,
     cost: 30000, shop: 'exotic',
   }),
@@ -409,7 +413,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
   // ---- Grenades ----
   petrol_bomb: w({
     id: 'petrol_bomb', name: 'Petrol Bomb', family: 'grenade', kind: 'throwable',
-    damage: 8, range: 120, cooldown: 800, ammo: 'none',
+    damage: 5, range: 120, cooldown: 800, ammo: 'none',
     ability: 'none', abilityLabel: 'Fire Pool', effect: 'burn', effectPower: 4,
     cost: 400, shop: 'grenades',
   }),

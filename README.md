@@ -4,7 +4,7 @@ Original top-down city action sandbox **inspired by** public GraalOnline Era sys
 
 ## Highlights
 
-- **GMap city**: 16×16 tiles, 2352×1008 px (147×63). Levels are 64×64 and the camera scrolls across them. Ground, walls, and roofs/canopies are separate layers, so you can walk under trees and eaves
+- **GMap city**: outdoor raster 2352×1008 px, 16×16 tiles (147×63). Each level is 64×64 tiles (1024×1024 px). A gold door on a building links into that building's own level; E at the gold mat inside returns you to the street
 - **Gun timing**: each family has damage, graze damage, freeze after a shot, bullet speed, reload time, and clip size
 - **Jobs**: timed trash pickup, mining, and car assembly. Gralats, weapons, hats, and cars save locally in the browser
 - Districts include Starter Area, Mercy Beach/West/East, Airport, Snow Resort, Spar Complex, Bank, Auction, Fashion Mall, Gun Point, and gang bases (GZ, Tachi, BH, BBZ, Lethal, Mafia / Pirate, Guerre, Neo)

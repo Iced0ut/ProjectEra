@@ -35,9 +35,15 @@ export class TitleScene extends Phaser.Scene {
         // ignore audio unlock races
       }
       hideTitle();
-      const state = loadOrCreate(profile);
-      this.scene.start('world', { state });
-      this.scene.launch('hud', { state });
+      try {
+        const state = loadOrCreate(profile);
+        this.scene.start('world', { state });
+        this.scene.launch('hud', { state });
+      } catch (err) {
+        this.entering = false;
+        showTitle(({ profile: again }) => startGame(again));
+        console.error(err);
+      }
     };
 
     showTitle(({ profile }) => startGame(profile));

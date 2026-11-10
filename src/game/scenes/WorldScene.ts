@@ -11,18 +11,38 @@ import {
   type Dir,
 } from '../config';
 import { saveGame } from '../save';
+import {
+  challengeLines,
+  claimChallenges,
+  ensureChallenges,
+  feedMiningMachine,
+  jobActivity,
+  noteActivity,
+  rerollChallenge,
+  spinSlots,
+} from '../content/eraLoop';
 import { levelLabel } from '../world/levels';
+import {
+  INTERIOR_ORIGIN_Y,
+  buildInterior,
+  interiorKindFor,
+  paintInteriorTexture,
+  type InteriorKind,
+} from '../levels/interiors';
 import {
   EFFECT_LABELS,
   applyOnHitToStatus,
   createStatus,
+  applyHeal,
   moveSpeedMultiplier,
+  movementReversed,
   tickStatusDamage,
   weaponDamage,
   type StatusState,
 } from '../combat';
 import { WEAPONS, heldStyle, weaponTiming, weaponsByShop, type WeaponDef } from '../content/weapons';
 import { AMBIENT_CITIZEN_SPOTS, CITY_NPCS, createCityBots, type BotDef, type NpcDef } from '../content/npcs';
+import { INSTANCE_MENU, INSTANCES, instanceForPlace, type InstanceDef } from '../content/instances';
 import {
   CRAB_DIG_CHANCE,
   CRAB_SHELL_DROP_CHANCE,
@@ -49,12 +69,14 @@ import { createWorld, districtNameAt, tileAt, type JobStation, type WorldData } 
 import { playMusic, playSfx } from '../audio';
 import { DISTRICTS } from '../content/districts';
 import { actorKeyFor, paintActorSheet, playActorAnim, type ActorLook } from '../sprites/characters';
+import { freshBotMind, thinkBot, type BotMind } from '../ai/botBrain';
 
 interface BotSprite extends Phaser.Physics.Arcade.Sprite {
   bot: BotDef;
   hp: number;
   status: StatusState;
   deadUntil: number;
+  mind: BotMind;
 }
 
 interface CitizenSprite extends Phaser.Physics.Arcade.Sprite {
@@ -75,6 +97,7 @@ export class WorldScene extends Phaser.Scene {
   private dashingUntil = 0;
   private bots!: Phaser.Physics.Arcade.Group;
   private bullets!: Phaser.Physics.Arcade.Group;
+  private botShots!: Phaser.Physics.Arcade.Group;
   private solids!: Phaser.Physics.Arcade.StaticGroup;
   private pickups!: Phaser.Physics.Arcade.Group;
   private shellDrops!: Phaser.Physics.Arcade.Group;
@@ -93,6 +116,22 @@ export class WorldScene extends Phaser.Scene {
   private levelSeen = '';
   private jobWork: { station: JobStation; until: number; originX: number; originY: number } | null = null;
   private jobReadyAt = new Map<string, number>();
+  private recentKills: number[] = [];
+  private instanceLeft = 0;
+  private instanceReward: InstanceDef | null = null;
+  private doors: { x: number; y: number; label: string; kind: InteriorKind }[] = [];
+  private inside: {
+    title: string;
+    noPk: boolean;
+    ox: number;
+    oy: number;
+    blocked: boolean[][];
+    exitX: number;
+    exitY: number;
+    returnX: number;
+    returnY: number;
+    objects: Phaser.GameObjects.GameObject[];
+  } | null = null;
 
   constructor() {
     super('world');
@@ -126,6 +165,11 @@ export class WorldScene extends Phaser.Scene {
       sprite.setSize(30, 12).setOffset(6, 12);
       const roof = this.add.image(obj.x + TILE, obj.y + 2, 'roof').setDepth(120000);
       roof.setDisplaySize(obj.type === 'house' ? 40 : 54, 16);
+      const doorX = obj.x + TILE;
+      const doorY = obj.y + TILE + 28;
+      const kind = interiorKindFor(obj.label ?? 'Building', obj.type);
+      this.doors.push({ x: doorX, y: doorY, label: obj.label ?? 'Building', kind });
+      this.add.rectangle(doorX, doorY, 16, 8, 0xe6c85a).setDepth(doorY);
     }
     for (const station of this.world.jobStations) {
       const key = station.job === 'trash' ? 'trash-pile' : station.job === 'mining' ? 'ore-vein' : 'assembly-bay';
@@ -157,6 +201,7 @@ export class WorldScene extends Phaser.Scene {
     this.bots = this.physics.add.group();
     this.spawnBots();
     this.bullets = this.physics.add.group();
+    this.botShots = this.physics.add.group();
     this.pickups = this.physics.add.group();
     this.shellDrops = this.physics.add.group();
     this.spawnJobPickups();
@@ -168,6 +213,7 @@ export class WorldScene extends Phaser.Scene {
     this.physics.add.overlap(this.player, this.shellDrops, (_p, item) => this.collectShellDrop(item as Phaser.Physics.Arcade.Sprite));
     this.physics.add.overlap(this.bullets, this.bots, (b, e) => this.bulletHit(b as Phaser.Physics.Arcade.Sprite, e as BotSprite));
     this.physics.add.overlap(this.player, this.bots, (_p, e) => this.playerTouchedBot(e as BotSprite));
+    this.physics.add.overlap(this.player, this.botShots, (_p, shot) => this.botShotHit(shot as Phaser.Physics.Arcade.Sprite));
 
     this.cameras.main.startFollow(this.player, true, 0.12, 0.12);
     this.cameras.main.setBounds(0, 0, MAP_W * TILE, MAP_H * TILE);
@@ -188,6 +234,9 @@ export class WorldScene extends Phaser.Scene {
     this.pushChat(`${CITY_NPCS.length} NPCs · ${AMBIENT_CITIZEN_SPOTS.length} citizens · ${createCityBots().length} bots.`);
     this.pushChat('Mercy Beach is along the south shore. Cross the bridge east into Southridge.');
     this.pushChat('Timed jobs: trash piles, South Mines ore, Auto Mile assembly. Your city saves on this computer.');
+    this.pushChat('Gold mats are doors. E enters that building as its own 64×64 level.');
+    this.pushChat('Cave Entrance is the Sea Dungeon. Event House runs Plasma waves. Job Bot shows daily challenges.');
+    ensureChallenges(this.state);
   }
 
   update(time: number, delta = 16): void {
@@ -215,18 +264,29 @@ export class WorldScene extends Phaser.Scene {
     this.hudTick += delta;
     if (this.hudTick >= 100) {
       this.hudTick = 0;
-      const cell = tileAt(this.world, this.player.x, this.player.y);
-      if (cell) {
-        const pk = cell.noPk ? 'NO-PK' : 'PK';
-        const place = districtNameAt(this.world, this.player.x, this.player.y);
-        const tx = Math.floor(this.player.x / TILE);
-        const ty = Math.floor(this.player.y / TILE);
-        const level = levelLabel(tx, ty);
-        if (this.levelSeen && level !== this.levelSeen) {
-          this.pushChat(`Crossed into level ${level}. The city keeps scrolling.`);
+      if (this.inside) {
+        const pk = this.inside.noPk ? 'NO-PK' : 'PK';
+        this.levelSeen = `in:${this.inside.title}`;
+        this.game.events.emit('era-region', `${this.inside.title} · ${pk} · level 64×64`);
+      } else {
+        const cell = tileAt(this.world, this.player.x, this.player.y);
+        if (cell) {
+          const pk = cell.noPk ? 'NO-PK' : 'PK';
+          const place = districtNameAt(this.world, this.player.x, this.player.y);
+          const tx = Math.floor(this.player.x / TILE);
+          const ty = Math.floor(this.player.y / TILE);
+          const level = levelLabel(tx, ty);
+          if (this.levelSeen && level !== this.levelSeen && !this.levelSeen.startsWith('in:')) {
+            this.pushChat(`Crossed into level ${level}. The city keeps scrolling.`);
+          }
+          this.levelSeen = level;
+          this.game.events.emit('era-region', `${cell.region} · ${place} · ${pk} · ${level}`);
+          if (cell.zone === 'bank' && this.state.gangName && time - this.state.bankPaidAt > 60000) {
+            this.state.bankPaidAt = time;
+            this.state.gralats += 5;
+            this.pushChat('Bank holding: +5g (300g an hour while your gang holds it).');
+          }
         }
-        this.levelSeen = level;
-        this.game.events.emit('era-region', `${cell.region} · ${place} · ${pk} · ${level}`);
       }
       this.game.events.emit('era-hint', this.nearInteractLabel());
       this.game.events.emit('era-state', this.state);
@@ -297,17 +357,20 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private createBotSprite(bot: BotDef): BotSprite {
+    const look = this.lookFromSeed(bot.name.length, bot.kind === 'police_bot' ? 1 : 3);
+    const crowd = Math.abs(look.hair + look.shirt * 3 + look.pants * 5) % 8;
     const key =
       bot.kind === 'beach_crab'
         ? 'crab'
         : bot.kind === 'training_dummy'
           ? 'crate'
-          : this.sheetFor(bot.id, this.lookFromSeed(bot.name.length, bot.kind === 'police_bot' ? 1 : 3));
+          : this.sheetFor(`crowd-${bot.kind}-${crowd}`, look);
     const spr = this.bots.create(bot.x * TILE, bot.y * TILE, key, 0) as BotSprite;
     spr.bot = bot;
     spr.hp = bot.hp;
     spr.status = createStatus();
     spr.deadUntil = 0;
+    spr.mind = freshBotMind(bot.x * TILE, bot.y * TILE, bot.name.length % 2 === 0 ? 1 : -1);
     spr.setDepth(bot.y * TILE);
     if (key === 'crab' || key === 'crate') {
       if (bot.tint) spr.setTint(bot.tint);
@@ -321,17 +384,36 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private drawTiles(): void {
-    const rt = this.add.renderTexture(0, 0, MAP_W * TILE, MAP_H * TILE).setOrigin(0, 0).setDepth(0);
+    // One CPU canvas, then a single texture. Stamping every tile on the GPU
+    // stalls software WebGL and leaves the city on the loading screen.
+    const canvas = document.createElement('canvas');
+    canvas.width = MAP_W * TILE;
+    canvas.height = MAP_H * TILE;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.imageSmoothingEnabled = false;
+    const sources = new Map<string, CanvasImageSource>();
+    const sourceFor = (key: string): CanvasImageSource | null => {
+      const cached = sources.get(key);
+      if (cached) return cached;
+      if (!this.textures.exists(key)) return null;
+      const image = this.textures.get(key).getSourceImage() as CanvasImageSource;
+      sources.set(key, image);
+      return image;
+    };
     for (let y = 0; y < MAP_H; y++) {
       for (let x = 0; x < MAP_W; x++) {
         const tile = this.world.cells[y][x].tile;
         const alt = (x + y) % 2 === 1;
         let key = `tile-${tile}`;
         if (alt && this.textures.exists(`${key}-b`)) key = `${key}-b`;
-        if (!this.textures.exists(key)) key = 'tile-grass';
-        rt.draw(key, x * TILE, y * TILE);
+        const image = sourceFor(key) ?? sourceFor('tile-grass');
+        if (image) ctx.drawImage(image, x * TILE, y * TILE);
       }
     }
+    if (this.textures.exists('world-ground')) this.textures.remove('world-ground');
+    this.textures.addCanvas('world-ground', canvas);
+    this.add.image(0, 0, 'world-ground').setOrigin(0, 0).setDepth(0);
   }
 
   private drawDistrictLabels(): void {
@@ -427,6 +509,10 @@ export class WorldScene extends Phaser.Scene {
       vy = 1;
       this.dir = 'down';
     }
+    if (movementReversed(this.playerStatus, time)) {
+      vx = -vx;
+      vy = -vy;
+    }
 
     const frozen = time < this.frozenUntil;
     if (!frozen && Phaser.Input.Keyboard.JustDown(this.keys.SHIFT) && time > this.dashReady) {
@@ -453,7 +539,7 @@ export class WorldScene extends Phaser.Scene {
       playActorAnim(this.player, this.actorKey, this.dir, vx !== 0 || vy !== 0);
     }
 
-    const cell = tileAt(this.world, this.player.x, this.player.y);
+    const cell = this.footCell(this.player.x, this.player.y);
     if (cell?.blocked) {
       body.setVelocity(0, 0);
       this.player.x -= vx * 4;
@@ -499,7 +585,7 @@ export class WorldScene extends Phaser.Scene {
 
     if (weapon.effect === 'heal' || (weapon.ability === 'alt_heal' && this.state.altHealMode)) {
       const heal = weapon.healAmount ?? weapon.effectPower;
-      this.state.hp = Math.min(this.state.maxHp, this.state.hp + heal);
+      this.tryHeal(heal);
       playSfx(this, 'heal');
       this.pushChat(`Healed +${heal}`);
     }
@@ -540,7 +626,7 @@ export class WorldScene extends Phaser.Scene {
 
     if (weapon.ability === 'alt_heal' && this.state.altHealMode) {
       const heal = weapon.healAmount ?? 4;
-      this.state.hp = Math.min(this.state.maxHp, this.state.hp + heal);
+      this.tryHeal(heal);
       playSfx(this, 'heal');
       this.pushChat(`Heal mode +${heal}`);
       return;
@@ -556,7 +642,7 @@ export class WorldScene extends Phaser.Scene {
       const bullet = this.bullets.create(this.player.x, this.player.y, 'bullet') as Phaser.Physics.Arcade.Sprite;
       bullet.setDepth(2000);
       bullet.setData('weaponId', weapon.id);
-      bullet.setData('damage', weaponDamage(weapon, this.state.clipLeft + 1));
+      bullet.setData('damage', weaponDamage(weapon, this.state.clipLeft + 1, this.state.altHealMode));
       bullet.setData('graze', timing.grazeDamage);
       this.physics.velocityFromRotation(angle, speed, bullet.body!.velocity);
       const life = Math.min(1400, (weapon.range / speed) * 1000 + 120);
@@ -632,7 +718,7 @@ export class WorldScene extends Phaser.Scene {
           this.pushChat(`Heal mode ${this.state.altHealMode ? 'ON' : 'OFF'}`);
         } else {
           const heal = weapon.healAmount ?? 5;
-          this.state.hp = Math.min(this.state.maxHp, this.state.hp + heal);
+          this.tryHeal(heal);
           playSfx(this, 'heal');
           this.pushChat(`Healed +${heal}`);
         }
@@ -680,13 +766,13 @@ export class WorldScene extends Phaser.Scene {
     if (enemy.bot.kind === 'training_dummy') {
       // still apply visuals/effects for testing
     }
-    let dmg = amount ?? weaponDamage(weapon, this.state.clipLeft);
+    let dmg = amount ?? weaponDamage(weapon, this.state.clipLeft, this.state.altHealMode);
     if (amount === undefined && weapon.kind === 'throwable') dmg = weapon.damage;
 
     const hit = applyOnHitToStatus(enemy.status, weapon.effect, weapon.effectPower, time);
     if (hit.healAttacker > 0 || weapon.effect === 'lifesteal') {
       const heal = hit.healAttacker || weapon.effectPower;
-      this.state.hp = Math.min(this.state.maxHp, this.state.hp + heal);
+      this.tryHeal(heal);
     }
     if (hit.knockback > 0) {
       const angle = Phaser.Math.Angle.Between(this.player.x, this.player.y, enemy.x, enemy.y);
@@ -704,6 +790,7 @@ export class WorldScene extends Phaser.Scene {
     }
 
     enemy.hp -= dmg;
+    enemy.mind.alertUntil = time + 8000;
     this.floatHit(enemy.x, enemy.y - 8, graze ? `graze ${Math.round(dmg)}` : `${Math.round(dmg)}`, graze ? '#f0c14b' : '#f4f7fb');
     playSfx(this, 'hit');
     enemy.setTintFill(0xffffff);
@@ -727,6 +814,28 @@ export class WorldScene extends Phaser.Scene {
     const permanent = enemy.bot.respawnMs >= 999999;
     enemy.deadUntil = permanent ? Number.POSITIVE_INFINITY : time + enemy.bot.respawnMs;
     this.state.kills += 1;
+    this.state.killStreak += 1;
+    this.recentKills.push(time);
+    this.recentKills = this.recentKills.filter((stamp) => time - stamp < 15000);
+    if (this.recentKills.length >= 3) {
+      this.state.speedBoostUntil = Math.max(this.state.speedBoostUntil, time + 30000);
+      this.pushChat('Speed streak — faster for 30s.');
+      this.recentKills = [];
+    }
+    if (this.state.killStreak > 0 && this.state.killStreak % 50 === 0) {
+      this.tryHeal(50);
+      this.pushChat(`Kill streak ${this.state.killStreak}. +50 HP.`);
+    }
+    if (enemy.bot.kind === 'beach_crab') {
+      const ready = noteActivity(this.state, 'crabs');
+      if (ready) this.pushChat(ready);
+    }
+    if (enemy.bot.id.startsWith('inst')) {
+      this.instanceLeft = Math.max(0, this.instanceLeft - 1);
+      if (this.instanceLeft === 0) this.finishInstance();
+    }
+    const killReady = noteActivity(this.state, 'kills');
+    if (killReady) this.pushChat(killReady);
     this.state.gralats += enemy.bot.loot;
     playSfx(this, 'coin');
 
@@ -757,6 +866,7 @@ export class WorldScene extends Phaser.Scene {
         if (enemy.deadUntil && time >= enemy.deadUntil) {
           enemy.hp = enemy.bot.hp;
           enemy.status = createStatus();
+          enemy.mind = freshBotMind(enemy.bot.x * TILE, enemy.bot.y * TILE, enemy.mind?.strafe ?? 1);
           enemy.setPosition(enemy.bot.x * TILE, enemy.bot.y * TILE);
           enemy.setActive(true).setVisible(true);
           (enemy.body as Phaser.Physics.Arcade.Body).enable = true;
@@ -767,7 +877,10 @@ export class WorldScene extends Phaser.Scene {
       const statusDmg = tickStatusDamage(enemy.status, time, dt);
       if (statusDmg > 0) {
         enemy.hp -= statusDmg;
-        if (enemy.hp <= 0) this.killBot(enemy, time);
+        if (enemy.hp <= 0) {
+          this.killBot(enemy, time);
+          return;
+        }
       }
 
       const mul = moveSpeedMultiplier(enemy.status, time);
@@ -776,13 +889,66 @@ export class WorldScene extends Phaser.Scene {
         (enemy.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
         return;
       }
-      const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, enemy.x, enemy.y);
-      if (dist < enemy.bot.aggro) {
-        this.physics.moveToObject(enemy, this.player, enemy.bot.speed * mul);
-      } else {
-        (enemy.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
+      const cell = tileAt(this.world, this.player.x, this.player.y);
+      const neighbors = this.bots.getChildren()
+        .filter((other) => other !== enemy && (other as BotSprite).active)
+        .map((other) => ({ x: (other as BotSprite).x, y: (other as BotSprite).y }));
+      const order = thinkBot({
+        kind: enemy.bot.kind,
+        x: enemy.x,
+        y: enemy.y,
+        hp: enemy.hp,
+        maxHp: enemy.bot.hp,
+        speed: enemy.bot.speed * mul,
+        aggro: enemy.bot.aggro,
+        time,
+        px: this.player.x,
+        py: this.player.y,
+        playerInSafe: !!cell?.noPk,
+        neighbors,
+        mind: enemy.mind,
+      });
+      (enemy.body as Phaser.Physics.Arcade.Body).setVelocity(order.vx, order.vy);
+      if (order.winding) enemy.setTint(0xffd27a);
+      else if (enemy.bot.tint) enemy.setTint(enemy.bot.tint);
+      else enemy.clearTint();
+      const moving = Math.hypot(order.vx, order.vy) > 8;
+      if (enemy.texture.key !== 'crab' && enemy.texture.key !== 'crate') {
+        playActorAnim(enemy, enemy.texture.key, order.facing, moving);
       }
+      if (order.attack === 'shot') this.fireBotShot(enemy);
+      else if (order.attack === 'melee') this.botMelee(enemy, time);
     });
+  }
+
+  private botMelee(enemy: BotSprite, time: number): void {
+    const reach = 40;
+    if (Phaser.Math.Distance.Between(enemy.x, enemy.y, this.player.x, this.player.y) > reach) return;
+    const slash = this.add.image(enemy.x + (this.player.x - enemy.x) * 0.45, enemy.y + (this.player.y - enemy.y) * 0.45, 'slash');
+    slash.setDepth(enemy.y + 2);
+    this.tweens.add({ targets: slash, alpha: 0, duration: 140, onComplete: () => slash.destroy() });
+    this.hurtPlayer(enemy, enemy.bot.damage, time);
+  }
+
+  private fireBotShot(enemy: BotSprite): void {
+    const shot = this.botShots.create(enemy.x, enemy.y, 'bullet') as Phaser.Physics.Arcade.Sprite;
+    shot.setDepth(enemy.y + 1);
+    shot.setTint(enemy.bot.kind === 'police_bot' ? 0x4aa3ff : 0xff8a6a);
+    shot.setData('owner', enemy.bot.id);
+    shot.setData('damage', enemy.bot.damage);
+    this.physics.moveToObject(shot, this.player, 210);
+    this.time.delayedCall(700, () => {
+      if (shot.active) shot.destroy();
+    });
+  }
+
+  private botShotHit(shot: Phaser.Physics.Arcade.Sprite): void {
+    const ownerId = shot.getData('owner') as string;
+    const owner = this.bots.getChildren().find((obj) => (obj as BotSprite).bot.id === ownerId) as BotSprite | undefined;
+    const damage = (shot.getData('damage') as number) || 4;
+    shot.destroy();
+    if (!owner) return;
+    this.hurtPlayer(owner, damage, this.time.now);
   }
 
   private updateCitizens(time: number): void {
@@ -809,24 +975,44 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private playerTouchedBot(enemy: BotSprite): void {
-    if (!enemy.active || enemy.hp <= 0 || enemy.bot.damage <= 0) return;
+    this.hurtPlayer(enemy, enemy.bot.damage, this.time.now);
+  }
+
+  private hurtPlayer(enemy: BotSprite, amount: number, time: number): void {
+    if (!enemy.active || enemy.hp <= 0 || amount <= 0) return;
     const cell = tileAt(this.world, this.player.x, this.player.y);
-    if (cell?.noPk && enemy.bot.kind !== 'beach_crab') return;
-    if (this.time.now < (this.player.getData('iframes') as number)) return;
-    this.player.setData('iframes', this.time.now + 450);
-    let dmg = enemy.bot.damage;
-    if (this.time.now < this.state.shieldUntil) dmg *= 0.5;
+    const alert = time < enemy.mind.alertUntil;
+    if (cell?.noPk && enemy.bot.kind !== 'beach_crab' && !alert) return;
+    if (time < (this.player.getData('iframes') as number)) return;
+    this.player.setData('iframes', time + 480);
+    let dmg = amount;
+    if (time < this.state.shieldUntil) dmg *= 0.5;
     this.state.hp -= dmg;
+    this.floatHit(this.player.x, this.player.y - 16, `${Math.round(dmg)}`, '#ff8a6a');
     playSfx(this, 'hurt');
     this.cameras.main.shake(70, 0.003);
     if (this.state.hp <= 0) this.respawn();
   }
 
+  private tryHeal(amount: number): boolean {
+    const next = applyHeal(this.state.hp, this.state.maxHp, this.playerStatus, this.time.now, amount);
+    if (next === this.state.hp && this.time.now < this.playerStatus.antiHealUntil) {
+      this.pushChat('Anti-heal — healing blocked.');
+      return false;
+    }
+    this.state.hp = next;
+    return true;
+  }
+
   private respawn(): void {
+    if (this.inside) this.leaveInterior();
     this.state.hp = this.state.maxHp;
+    this.state.killStreak = 0;
+    this.recentKills = [];
     this.player.setPosition(this.world.spawn.x, this.world.spawn.y);
     this.playerStatus = createStatus();
-    this.pushChat('Knocked out — respawned at the Starter Area.');
+    this.player.setData('iframes', this.time.now + 2000);
+    this.pushChat('Knocked out. No gralats or items lost. Spawn protection for 2s at the Starter Area.');
   }
 
   private bulletHit(bullet: Phaser.Physics.Arcade.Sprite, enemy: BotSprite): void {
@@ -950,13 +1136,22 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private nearInteractLabel(): string {
+    if (this.nearExit()) return `E — leave ${this.inside?.title ?? 'building'}`;
+    if (this.inside) return 'Walk to the gold door and press E to return outside';
+    const door = this.nearestDoor();
+    const doorDist = door ? Phaser.Math.Distance.Between(this.player.x, this.player.y, door.x, door.y) : 999;
     const stationHit = this.nearestStation();
-    if (stationHit) {
+    const npc = this.nearestNpc();
+    const npcDist = npc
+      ? Phaser.Math.Distance.Between(this.player.x, this.player.y, npc.x * TILE, npc.y * TILE)
+      : 999;
+    const stationDist = stationHit?.dist ?? 999;
+    if (door && doorDist <= npcDist && doorDist <= stationDist) return `E — enter ${door.label}`;
+    if (stationHit && stationDist <= npcDist) {
       if (stationHit.station.job === 'trash') return 'E — pick up trash (stay still)';
       if (stationHit.station.job === 'mining') return 'E — mine ore (stay still)';
       return 'E — assemble a car part (needs 1 ore)';
     }
-    const npc = this.nearestNpc();
     if (npc) return `E — ${npc.name} (${npc.role})`;
     const cell = tileAt(this.world, this.player.x, this.player.y);
     if (!cell) return '';
@@ -989,11 +1184,23 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private interact(): void {
+    if (this.nearExit()) {
+      this.leaveInterior();
+      return;
+    }
+    if (this.inside) return;
+    const door = this.nearestDoor();
+    const doorDist = door ? Phaser.Math.Distance.Between(this.player.x, this.player.y, door.x, door.y) : 999;
     const stationHit = this.nearestStation();
     const npc = this.nearestNpc();
     const npcDist = npc
       ? Phaser.Math.Distance.Between(this.player.x, this.player.y, npc.x * TILE, npc.y * TILE)
       : 999;
+    const stationDist = stationHit?.dist ?? 999;
+    if (door && doorDist <= npcDist && doorDist <= stationDist) {
+      this.enterBuilding(door);
+      return;
+    }
     if (stationHit && (!npc || stationHit.dist <= npcDist)) {
       this.startJob(stationHit.station);
       return;
@@ -1010,7 +1217,7 @@ export class WorldScene extends Phaser.Scene {
       else       if (npc.role === 'shell_shop') this.shellShopMenu();
       else if (npc.role === 'crab_shack') this.crabShackMenu();
       else if (npc.role === 'warp') this.useNearestWarp();
-      else if (npc.role === 'job') this.doRandomJob();
+      else if (npc.role === 'job') this.jobDesk();
       else if (npc.role === 'pizza') this.doJob('pizza', 'pizza', 10, 15);
       else if (npc.role === 'mail') this.doJob('mail', 'mail', 9, 14);
       else if (npc.role === 'gang') this.gangMenu();
@@ -1026,6 +1233,188 @@ export class WorldScene extends Phaser.Scene {
     else if (cell.zone === 'start_park' || cell.zone === 'downtown') {
       /* plaza - no default job */
     }
+  }
+
+  private footCell(wx: number, wy: number) {
+    if (this.inside) {
+      const tx = Math.floor((wx - this.inside.ox) / TILE);
+      const ty = Math.floor((wy - this.inside.oy) / TILE);
+      const row = this.inside.blocked[ty];
+      const blocked = !row || row[tx] !== false;
+      return {
+        tile: 'path' as const,
+        blocked,
+        zone: 'wilderness' as const,
+        noPk: this.inside.noPk,
+        region: 'northridge' as const,
+      };
+    }
+    return tileAt(this.world, wx, wy);
+  }
+
+  private nearestDoor(): { x: number; y: number; label: string; kind: InteriorKind } | null {
+    let best: { x: number; y: number; label: string; kind: InteriorKind } | null = null;
+    let bestDist = 42;
+    for (const door of this.doors) {
+      const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, door.x, door.y);
+      if (dist < bestDist) {
+        best = door;
+        bestDist = dist;
+      }
+    }
+    return best;
+  }
+
+  private nearExit(): boolean {
+    if (!this.inside) return false;
+    return Phaser.Math.Distance.Between(this.player.x, this.player.y, this.inside.exitX, this.inside.exitY) < 48;
+  }
+
+  private enterBuilding(door: { x: number; y: number; label: string; kind: InteriorKind }): void {
+    if (this.inside) return;
+    const level = buildInterior(door.kind, door.label);
+    const key = paintInteriorTexture(this, level);
+    const ox = 0;
+    const oy = INTERIOR_ORIGIN_Y;
+    const objects: Phaser.GameObjects.GameObject[] = [];
+    objects.push(this.add.image(ox, oy, key).setOrigin(0, 0).setDepth(0));
+    for (const prop of level.props) {
+      objects.push(
+        this.add
+          .image(ox + prop.tx * TILE + 8, oy + prop.ty * TILE + 8, prop.key)
+          .setDepth(oy + prop.ty * TILE)
+          .setDisplaySize(28, 22),
+      );
+    }
+    objects.push(
+      this.add
+        .text(ox + 32 * TILE, oy + 8 * TILE, door.label.toUpperCase(), {
+          fontFamily: 'Sora, sans-serif',
+          fontSize: '16px',
+          fontStyle: '700',
+          color: '#f4f7fb',
+          stroke: '#1a120e',
+          strokeThickness: 4,
+        })
+        .setOrigin(0.5)
+        .setDepth(oy + 200)
+        .setResolution(2),
+    );
+    const span = level.size * TILE;
+    this.inside = {
+      title: door.label,
+      noPk: level.noPk,
+      ox,
+      oy,
+      blocked: level.blocked,
+      exitX: ox + (level.exitTx + 1) * TILE,
+      exitY: oy + level.exitTy * TILE,
+      returnX: door.x,
+      returnY: door.y + 18,
+      objects,
+    };
+    this.physics.world.setBounds(0, 0, Math.max(MAP_W, level.size) * TILE, oy + span);
+    this.player.setPosition(ox + level.spawnTx * TILE, oy + level.spawnTy * TILE);
+    this.physics.world.setBounds(ox, oy, span, span);
+    this.cameras.main.setBounds(ox, oy, span, span);
+    playSfx(this, 'ui');
+    this.pushChat(`Entered ${door.label}. Own level, 64×64 tiles. Gold door south, E to leave.`);
+    this.levelSeen = `in:${door.label}`;
+    this.openLinkedInstance(door.label);
+  }
+
+  private openLinkedInstance(label: string): void {
+    const lower = label.toLowerCase();
+    if (lower.includes('event')) {
+      const pick = window.prompt(`Event levels: ${INSTANCE_MENU}`, 'plasma');
+      const def = pick ? INSTANCES[pick.trim().toLowerCase()] : undefined;
+      if (def) this.spawnInstance(def);
+      return;
+    }
+    if (lower.includes('airport')) {
+      const pick = window.prompt('Airport gates: arte, tutorial, snow', 'arte');
+      const def = pick ? INSTANCES[pick.trim().toLowerCase()] : undefined;
+      if (def) this.spawnInstance(def);
+      return;
+    }
+    const linked = instanceForPlace(label);
+    if (linked) this.spawnInstance(linked);
+  }
+
+  private spawnInstance(def: InstanceDef): void {
+    if (!this.inside) return;
+    this.inside.noPk = def.noPk;
+    this.inside.title = def.title;
+    this.instanceReward = def.reward > 0 || def.coin ? def : null;
+    this.instanceLeft = 0;
+    const ox = this.inside.ox / TILE;
+    const oy = this.inside.oy / TILE;
+    let n = 0;
+    def.waves.forEach((wave, wi) => {
+      for (let i = 0; i < wave.count; i++) {
+        n += 1;
+        const boss = wave.hp >= 180;
+        const bot: BotDef = {
+          id: `${boss ? 'inst_boss' : 'inst'}_${def.id}_${n}`,
+          kind: wave.kind,
+          name: wave.name,
+          x: ox + 14 + (i % 5) * 6,
+          y: oy + 18 + wi * 8,
+          hp: wave.hp,
+          speed: boss ? 60 : 50,
+          damage: wave.damage,
+          aggro: def.noPk ? 0 : 320,
+          respawnMs: 999999,
+          loot: wave.loot,
+          tint: wave.tint,
+        };
+        this.createBotSprite(bot);
+        this.instanceLeft += 1;
+      }
+    });
+    this.pushChat(def.blurb);
+  }
+
+  private finishInstance(): void {
+    const def = this.instanceReward;
+    this.instanceReward = null;
+    this.instanceLeft = 0;
+    if (!def) return;
+    if (def.reward > 0) this.state.gralats += def.reward;
+    if (def.coin === 'sea') this.state.seaCoins += 1;
+    if (def.coin === 'plasma') this.state.plasmaCoins += 1;
+    if (def.coin === 'gang') this.state.gangCoins += 1;
+    if (def.coin === 'event') addItem(this.state, 'event_coin', 1);
+    const ready = noteActivity(this.state, def.id === 'sea' ? 'sea' : def.id === 'plasma' ? 'plasma' : 'kills', 0);
+    void ready;
+    if (def.id === 'sea') noteActivity(this.state, 'sea');
+    if (def.id === 'plasma') noteActivity(this.state, 'plasma');
+    unlockAchievement(this.state, `visit-${def.id}`, `Cleared ${def.title}`);
+    this.pushChat(`${def.title} clear.${def.reward ? ` +${def.reward}g.` : ''}${def.coin ? ` +1 ${def.coin} coin.` : ''}`);
+    playSfx(this, 'levelup');
+    saveGame(this.state);
+  }
+
+  private leaveInterior(): void {
+    if (!this.inside) return;
+    const backX = this.inside.returnX;
+    const backY = this.inside.returnY;
+    const title = this.inside.title;
+    for (const obj of this.inside.objects) obj.destroy();
+    this.bots.getChildren().forEach((obj) => {
+      const bot = obj as BotSprite;
+      if (bot.bot.id.startsWith('inst')) bot.destroy();
+    });
+    this.instanceLeft = 0;
+    this.instanceReward = null;
+    this.inside = null;
+    this.physics.world.setBounds(0, 0, MAP_W * TILE, INTERIOR_ORIGIN_Y + 64 * TILE);
+    this.player.setPosition(backX, backY);
+    this.physics.world.setBounds(0, 0, MAP_W * TILE, MAP_H * TILE);
+    this.cameras.main.setBounds(0, 0, MAP_W * TILE, MAP_H * TILE);
+    playSfx(this, 'ui');
+    this.pushChat(`Left ${title}. Back on the city map.`);
+    this.levelSeen = '';
   }
 
   private useNearestWarp(): void {
@@ -1215,6 +1604,8 @@ export class WorldScene extends Phaser.Scene {
       }
     }
 
+    const digReady = noteActivity(this.state, 'dig');
+    if (digReady) this.pushChat(digReady);
     const leveled = grantJobXp(this.state, 'digging', 5);
     if (leveled) {
       playSfx(this, 'levelup');
@@ -1302,6 +1693,12 @@ export class WorldScene extends Phaser.Scene {
     this.state.gralats += pay;
     if (grantItem) addItem(this.state, itemId, 1);
     const leveled = grantJobXp(this.state, job, 8);
+    if (job === 'mining') addItem(this.state, 'rock', 1);
+    const activity = jobActivity(job);
+    if (activity) {
+      const ready = noteActivity(this.state, activity);
+      if (ready) this.pushChat(ready);
+    }
     this.pushChat(`Job ${job}: +${pay}g${grantItem ? `, +1 ${itemId}` : ''}`);
     if (leveled) {
       playSfx(this, 'levelup');
@@ -1529,13 +1926,42 @@ export class WorldScene extends Phaser.Scene {
     this.pushChat(`Placed ${item}. Total ${this.state.furniture.length}`);
   }
 
+  private jobDesk(): void {
+    ensureChallenges(this.state);
+    const choice = window.prompt(
+      `JOB DESK — ${this.state.gralats}g\n${challengeLines(this.state).join('\n')}\nSea ${this.state.seaCoins} · Plasma ${this.state.plasmaCoins} · Gang ${this.state.gangCoins}\n\nclaim / reroll 1-3 / mine / slots / work`,
+      'claim',
+    );
+    if (!choice) return;
+    const cmd = choice.trim().toLowerCase();
+    if (cmd === 'claim') {
+      this.pushChat(claimChallenges(this.state));
+      playSfx(this, 'coin');
+      return;
+    }
+    if (cmd.startsWith('reroll')) {
+      const index = Math.max(1, Math.min(3, Number(cmd.split(' ')[1]) || 1)) - 1;
+      this.pushChat(rerollChallenge(this.state, index));
+      return;
+    }
+    if (cmd === 'mine') {
+      this.pushChat(feedMiningMachine(this.state));
+      return;
+    }
+    if (cmd === 'slots') {
+      this.pushChat(spinSlots(this.state));
+      return;
+    }
+    this.doRandomJob();
+  }
+
   private gangMenu(): void {
     playSfx(this, 'ui');
     if (!this.state.gangName) {
-      const name = window.prompt('Create gang (50g):', 'Neon Crew');
+      const name = window.prompt('Create gang (2000g):', 'Neon Crew');
       if (!name) return;
-      if (this.state.gralats < 50) return void this.pushChat('Need 50g.');
-      this.state.gralats -= 50;
+      if (this.state.gralats < 2000) return void this.pushChat('Need 2000g.');
+      this.state.gralats -= 2000;
       this.state.gangName = name.trim().slice(0, 18);
       this.state.gangRank = 'Leader';
       playSfx(this, 'levelup');
@@ -1554,7 +1980,7 @@ export class WorldScene extends Phaser.Scene {
 
   private eatFood(): void {
     if (!consumeItem(this.state, 'food', 1)) return void this.pushChat('No food left.');
-    this.state.hp = Math.min(this.state.maxHp, this.state.hp + 15);
+    if (!this.tryHeal(15)) return;
     playSfx(this, 'heal');
     this.pushChat('Ate snack (+15 HP).');
   }
