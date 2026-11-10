@@ -189,6 +189,31 @@ export function generateTextures(scene: Phaser.Scene): void {
     g.fillCircle(8, 8, 2);
   });
 
+  px(scene, 'shell', 18, 14, (g) => {
+    g.fillStyle(0xe8d5b7, 1);
+    g.fillEllipse(9, 8, 16, 10);
+    g.fillStyle(0xc4b49a, 1);
+    g.fillEllipse(9, 7, 8, 5);
+  });
+
+  px(scene, 'shovel', 20, 28, (g) => {
+    g.fillStyle(0x8b5a2b, 1);
+    g.fillRect(8, 0, 4, 18);
+    g.fillStyle(0x9aa4b4, 1);
+    g.fillTriangle(2, 18, 18, 18, 10, 28);
+  });
+
+  px(scene, 'crab', 28, 20, (g) => {
+    g.fillStyle(0xff6b4a, 1);
+    g.fillEllipse(14, 12, 20, 12);
+    g.fillStyle(0xff9a5a, 1);
+    g.fillCircle(4, 10, 4);
+    g.fillCircle(24, 10, 4);
+    g.fillStyle(0x1a1a1a, 1);
+    g.fillCircle(10, 10, 2);
+    g.fillCircle(18, 10, 2);
+  });
+
   px(scene, 'furniture', 28, 20, (g) => {
     g.fillStyle(0x8b5a2b, 1);
     g.fillRect(0, 8, 28, 12);

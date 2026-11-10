@@ -22,6 +22,18 @@ import {
 import { WEAPONS, weaponsByShop, type WeaponDef } from '../content/weapons';
 import { AMBIENT_CITIZEN_SPOTS, CITY_NPCS, createCityBots, type BotDef, type NpcDef } from '../content/npcs';
 import {
+  CRAB_DIG_CHANCE,
+  CRAB_SHELL_DROP_CHANCE,
+  DIG_COOLDOWN_MS,
+  SHELLS,
+  SHELL_CLAIM_MS,
+  SHOVEL_COST,
+  SHOVEL_MAX_USES,
+  rollCrabShell,
+  rollShell,
+  shellById,
+} from '../content/digging';
+import {
   addItem,
   consumeItem,
   currentWeapon,
@@ -61,6 +73,7 @@ export class WorldScene extends Phaser.Scene {
   private bullets!: Phaser.Physics.Arcade.Group;
   private solids!: Phaser.Physics.Arcade.StaticGroup;
   private pickups!: Phaser.Physics.Arcade.Group;
+  private shellDrops!: Phaser.Physics.Arcade.Group;
   private citizens!: Phaser.Physics.Arcade.Group;
   private npcSprites: { sprite: Phaser.Physics.Arcade.Image; def: NpcDef }[] = [];
   private nameTag!: Phaser.GameObjects.Text;
@@ -68,6 +81,8 @@ export class WorldScene extends Phaser.Scene {
   private interactHint!: Phaser.GameObjects.Text;
   private effectText!: Phaser.GameObjects.Text;
   private playerStatus = createStatus();
+  private digReady = 0;
+  private digSerial = 0;
 
   constructor() {
     super('world');
@@ -149,12 +164,14 @@ export class WorldScene extends Phaser.Scene {
     this.spawnBots();
     this.bullets = this.physics.add.group();
     this.pickups = this.physics.add.group();
+    this.shellDrops = this.physics.add.group();
     this.spawnJobPickups();
 
     this.physics.add.collider(this.player, this.solids);
     this.physics.add.collider(this.bots, this.solids);
     this.physics.add.collider(this.citizens, this.solids);
     this.physics.add.overlap(this.player, this.pickups, (_p, item) => this.collectPickup(item as Phaser.Physics.Arcade.Sprite));
+    this.physics.add.overlap(this.player, this.shellDrops, (_p, item) => this.collectShellDrop(item as Phaser.Physics.Arcade.Sprite));
     this.physics.add.overlap(this.bullets, this.bots, (b, e) => this.bulletHit(b as Phaser.Physics.Arcade.Sprite, e as BotSprite));
     this.physics.add.overlap(this.player, this.bots, (_p, e) => this.playerTouchedBot(e as BotSprite));
 
@@ -250,7 +267,8 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private createBotSprite(bot: BotDef): BotSprite {
-    const key = bot.kind === 'beach_crab' ? 'rock' : bot.kind === 'training_dummy' ? 'crate' : 'enemy';
+    const key =
+      bot.kind === 'beach_crab' ? 'crab' : bot.kind === 'training_dummy' ? 'crate' : 'enemy';
     const spr = this.bots.create(bot.x * TILE, bot.y * TILE, key) as BotSprite;
     spr.bot = bot;
     spr.hp = bot.hp;
@@ -258,7 +276,7 @@ export class WorldScene extends Phaser.Scene {
     spr.deadUntil = 0;
     spr.setDepth(bot.y * TILE);
     if (bot.tint) spr.setTint(bot.tint);
-    if (key === 'enemy') spr.setSize(16, 12).setOffset(4, 18);
+    if (key === 'enemy' || key === 'crab') spr.setSize(16, 12).setOffset(4, 6);
     spr.setData('label', bot.name);
     return spr;
   }
@@ -585,11 +603,23 @@ export class WorldScene extends Phaser.Scene {
     }
     enemy.setActive(false).setVisible(false);
     (enemy.body as Phaser.Physics.Arcade.Body).enable = false;
-    enemy.deadUntil = time + enemy.bot.respawnMs;
+    const permanent = enemy.bot.respawnMs >= 999999;
+    enemy.deadUntil = permanent ? Number.POSITIVE_INFINITY : time + enemy.bot.respawnMs;
     this.state.kills += 1;
     this.state.gralats += enemy.bot.loot;
     playSfx(this, 'coin');
-    this.pushChat(`${enemy.bot.name} down (+${enemy.bot.loot}g). Kills ${this.state.kills}`);
+
+    if (enemy.bot.kind === 'beach_crab' && Math.random() < CRAB_SHELL_DROP_CHANCE) {
+      const drop = rollCrabShell();
+      this.spawnShellPickup(enemy.x, enemy.y, drop.id, drop.tint, true);
+      this.pushChat(`${enemy.bot.name} dropped ${drop.name}!`);
+    } else {
+      this.pushChat(`${enemy.bot.name} down (+${enemy.bot.loot}g). Kills ${this.state.kills}`);
+    }
+    if (permanent) {
+      this.time.delayedCall(500, () => enemy.destroy());
+    }
+
     if (this.state.kills === 10) {
       const ach = unlockAchievement(this.state, 'kills10', 'Ten down');
       if (ach) {
@@ -711,7 +741,13 @@ export class WorldScene extends Phaser.Scene {
     if (npc) return `E — ${npc.name} (${npc.role})`;
     const cell = tileAt(this.world, this.player.x, this.player.y);
     if (!cell) return '';
-    if (cell.zone === 'beach') return 'E — dig · crabs nearby';
+    if (cell.zone === 'beach' || cell.tile === 'sand') {
+      if (!this.state.shovelCount && this.state.shovelUses <= 0) {
+        return 'Buy a shovel at Isra/Bell Shell Shack (50g)';
+      }
+      if (!this.state.diggingEquipped) return 'E at Shell Shack to equip shovel, then dig sand';
+      return `E — dig sand (${this.state.shovelUses} uses · Trochus common)`;
+    }
     if (cell.zone === 'jobs') return 'E — city job';
     if (cell.zone === 'spar') return 'Fight spar bots · Q ability';
     if (cell.zone === 'gangbase') return 'G gang · enforcers patrol';
@@ -742,6 +778,8 @@ export class WorldScene extends Phaser.Scene {
       else if (npc.role === 'shop_exotic') this.openWeaponShop('exotic');
       else if (npc.role === 'shop_cars') this.buyCar();
       else if (npc.role === 'shop_fashion' || npc.role === 'shop_hats') this.fashionShop(npc.role);
+      else if (npc.role === 'shell_shop') this.shellShopMenu();
+      else if (npc.role === 'crab_shack') this.crabShackMenu();
       else if (npc.role === 'job') this.doRandomJob();
       else if (npc.role === 'pizza') this.doJob('pizza', 'pizza', 10, 15);
       else if (npc.role === 'mail') this.doJob('mail', 'mail', 9, 14);
@@ -750,9 +788,246 @@ export class WorldScene extends Phaser.Scene {
     }
     const cell = tileAt(this.world, this.player.x, this.player.y);
     if (!cell) return;
-    if (cell.zone === 'beach') this.doJob('digging', 'shell', 8, 12);
+    if (cell.zone === 'beach' || cell.tile === 'sand') this.digBeach();
     else if (cell.zone === 'jobs') this.doRandomJob();
     else if (cell.zone === 'house') this.houseMenu();
+  }
+
+  private shellShopMenu(): void {
+    playSfx(this, 'ui');
+    const shellSummary = SHELLS.map((s) => {
+      const count = this.state.inventory.find((i) => i.id === s.id)?.count ?? 0;
+      return `${s.name} x${count} (${s.sellPrice}g)`;
+    }).join('\n');
+    const choice = window.prompt(
+      `SHELL SHACK — ${this.state.gralats}g\nShovels owned: ${this.state.shovelCount} spare · equipped uses: ${this.state.shovelUses}/${SHOVEL_MAX_USES}\nDigging equipped: ${this.state.diggingEquipped ? 'YES' : 'NO'}\n\nYour shells:\n${shellSummary}\n\nType: buy / equip / sell / sellall`,
+      this.state.shovelUses > 0 || this.state.shovelCount > 0 ? 'equip' : 'buy',
+    );
+    if (!choice) return;
+    const cmd = choice.trim().toLowerCase();
+
+    if (cmd === 'buy') {
+      const qtyRaw = window.prompt('How many shovels? (50g each, recommended 5–10)', '5');
+      const qty = Math.max(1, Math.min(20, Number(qtyRaw) || 1));
+      const cost = qty * SHOVEL_COST;
+      if (this.state.gralats < cost) {
+        this.pushChat(`Need ${cost}g for ${qty} shovels.`);
+        return;
+      }
+      this.state.gralats -= cost;
+      this.state.shovelCount += qty;
+      playSfx(this, 'coin');
+      this.pushChat(`Bought ${qty} shovel(s). Spare: ${this.state.shovelCount}. Type equip to dig.`);
+      return;
+    }
+
+    if (cmd === 'equip') {
+      if (this.state.shovelUses <= 0) {
+        if (this.state.shovelCount <= 0) {
+          this.pushChat('No shovels. Buy some for 50g each.');
+          return;
+        }
+        this.state.shovelCount -= 1;
+        this.state.shovelUses = SHOVEL_MAX_USES;
+      }
+      this.state.diggingEquipped = true;
+      playSfx(this, 'ui');
+      this.pushChat(`Shovel equipped (${this.state.shovelUses} digs left). Dig on beach sand with E.`);
+      return;
+    }
+
+    if (cmd === 'sell' || cmd === 'sellall') {
+      this.sellShells(cmd === 'sellall' ? null : undefined);
+      return;
+    }
+
+    this.pushChat('Commands: buy, equip, sell, sellall');
+  }
+
+  private sellShells(forceAll: null | undefined): void {
+    if (forceAll === null) {
+      let earned = 0;
+      let sold = 0;
+      for (const shell of SHELLS) {
+        const item = this.state.inventory.find((i) => i.id === shell.id);
+        if (!item || item.count <= 0) continue;
+        earned += item.count * shell.sellPrice;
+        sold += item.count;
+        item.count = 0;
+      }
+      if (!sold) {
+        this.pushChat('No beach shells to sell.');
+        return;
+      }
+      this.state.gralats += earned;
+      playSfx(this, 'coin');
+      this.pushChat(`Sold ${sold} shells for ${earned}g.`);
+      grantJobXp(this.state, 'digging', Math.min(40, sold * 2));
+      return;
+    }
+
+    const id = window.prompt(
+      `Sell which shell?\n${SHELLS.map((s) => s.id).join(', ')}`,
+      'trochus',
+    );
+    if (!id) return;
+    const def = SHELLS.find((s) => s.id === id.trim().toLowerCase());
+    if (!def) {
+      this.pushChat('Unknown shell.');
+      return;
+    }
+    const item = this.state.inventory.find((i) => i.id === def.id);
+    if (!item || item.count <= 0) {
+      this.pushChat(`No ${def.name}.`);
+      return;
+    }
+    const qtyRaw = window.prompt(`Sell how many ${def.name}? (have ${item.count})`, String(item.count));
+    const qty = Math.max(1, Math.min(item.count, Number(qtyRaw) || 1));
+    item.count -= qty;
+    const earned = qty * def.sellPrice;
+    this.state.gralats += earned;
+    playSfx(this, 'coin');
+    this.pushChat(`Sold ${qty} ${def.name} for ${earned}g.`);
+    grantJobXp(this.state, 'digging', qty * 2);
+  }
+
+  private crabShackMenu(): void {
+    playSfx(this, 'ui');
+    const ids = [
+      'crab_shell_black',
+      'crab_shell_blue',
+      'crab_shell_green',
+      'crab_shell_red',
+      'crab_shell_yellow',
+    ];
+    let earned = 0;
+    let sold = 0;
+    for (const id of ids) {
+      const item = this.state.inventory.find((i) => i.id === id);
+      if (!item || item.count <= 0) continue;
+      const def = shellById(id);
+      const price = def && 'sellPrice' in def ? def.sellPrice : 6;
+      earned += item.count * price;
+      sold += item.count;
+      item.count = 0;
+    }
+    if (!sold) {
+      this.pushChat('No crab shells. Dig up crabs on the beach and kill them.');
+      return;
+    }
+    this.state.gralats += earned;
+    playSfx(this, 'coin');
+    this.pushChat(`Wandi bought ${sold} crab shells for ${earned}g.`);
+    grantJobXp(this.state, 'digging', sold * 3);
+  }
+
+  private digBeach(): void {
+    const time = this.time.now;
+    if (time < this.digReady) return;
+    this.digReady = time + DIG_COOLDOWN_MS;
+
+    if (!this.state.diggingEquipped || this.state.shovelUses <= 0) {
+      if (this.state.shovelCount > 0) {
+        this.pushChat('Equip a shovel at Isra/Bell Shell Shack first (E → equip).');
+      } else {
+        this.pushChat('Need a shovel (50g at Shell Shack).');
+      }
+      return;
+    }
+
+    const cell = tileAt(this.world, this.player.x, this.player.y);
+    if (!cell || (cell.tile !== 'sand' && cell.zone !== 'beach')) {
+      this.pushChat('Dig on beach sand only.');
+      return;
+    }
+
+    this.state.shovelUses -= 1;
+    playSfx(this, 'job');
+
+    // Dig grit visual
+    const grit = this.add.circle(this.player.x, this.player.y + 10, 6, 0xd2b48c, 0.7).setDepth(900);
+    this.tweens.add({ targets: grit, alpha: 0, y: grit.y + 8, duration: 280, onComplete: () => grit.destroy() });
+
+    if (Math.random() < CRAB_DIG_CHANCE) {
+      this.spawnDugCrab();
+    } else {
+      const shell = rollShell();
+      const ox = (Math.random() - 0.5) * 28;
+      const oy = 12 + Math.random() * 16;
+      this.spawnShellPickup(this.player.x + ox, this.player.y + oy, shell.id, shell.tint, true);
+      this.pushChat(`Dug up ${shell.name}! (${shell.sellPrice}g at shack)`);
+      if (shell.id === 'trochus') {
+        unlockAchievement(this.state, 'first-trochus', 'First Trochus');
+      }
+    }
+
+    const leveled = grantJobXp(this.state, 'digging', 5);
+    if (leveled) {
+      playSfx(this, 'levelup');
+      this.pushChat(leveled);
+    }
+
+    if (this.state.shovelUses <= 0) {
+      if (this.state.shovelCount > 0) {
+        this.state.shovelCount -= 1;
+        this.state.shovelUses = SHOVEL_MAX_USES;
+        this.pushChat(`Shovel broke! Auto-equipped spare (${this.state.shovelCount} left, ${this.state.shovelUses} uses).`);
+      } else {
+        this.state.diggingEquipped = false;
+        this.pushChat('Shovel broke! Buy more at the Shell Shack.');
+        playSfx(this, 'hurt');
+      }
+    }
+  }
+
+  private spawnShellPickup(x: number, y: number, shellId: string, tint: number, claimed: boolean): void {
+    const drop = this.shellDrops.create(x, y, 'shell') as Phaser.Physics.Arcade.Sprite;
+    drop.setTint(tint);
+    drop.setDepth(y);
+    drop.setData('shellId', shellId);
+    drop.setData('claimUntil', claimed ? this.time.now + SHELL_CLAIM_MS : 0);
+    drop.setData('owner', this.state.profile.name);
+    this.digSerial += 1;
+    // Soft despawn so the beach doesn't fill forever
+    this.time.delayedCall(45000, () => {
+      if (drop.active) drop.destroy();
+    });
+  }
+
+  private collectShellDrop(drop: Phaser.Physics.Arcade.Sprite): void {
+    const claimUntil = (drop.getData('claimUntil') as number) || 0;
+    const owner = drop.getData('owner') as string;
+    if (claimUntil > this.time.now && owner && owner !== this.state.profile.name) {
+      return; // someone else's fresh dig (future multiplayer)
+    }
+    const shellId = drop.getData('shellId') as string;
+    const def = shellById(shellId);
+    addItem(this.state, shellId, 1);
+    playSfx(this, 'pickup');
+    this.pushChat(`Picked up ${def?.name ?? shellId}`);
+    drop.destroy();
+  }
+
+  private spawnDugCrab(): void {
+    this.digSerial += 1;
+    const bot: BotDef = {
+      id: `dug_crab_${this.digSerial}`,
+      kind: 'beach_crab',
+      name: 'Dug Crab',
+      x: this.player.x / TILE,
+      y: this.player.y / TILE,
+      hp: 18,
+      speed: 70,
+      damage: 3,
+      aggro: 200,
+      respawnMs: 999999,
+      loot: 2,
+      tint: 0xff6b4a,
+    };
+    const spr = this.createBotSprite(bot);
+    spr.setPosition(this.player.x + 20, this.player.y);
+    playSfx(this, 'hurt');
+    this.pushChat('A crab burst from the sand! (3 dmg — kill it for a crab shell)');
   }
 
   private doRandomJob(): void {

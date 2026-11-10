@@ -116,8 +116,14 @@ export class HudScene extends Phaser.Scene {
         .join('\n');
       const guns = this.state.ownedWeapons.length;
       this.panelText.setVisible(true);
+      const shells = this.state.inventory
+        .filter((i) =>
+          ['trochus', 'aerolata', 'sand_dollar', 'scallop', 'starfish'].includes(i.id) && i.count > 0,
+        )
+        .map((i) => `${i.name}:${i.count}`)
+        .join(' ');
       this.panelText.setText(
-        `INVENTORY\n${inv || 'empty'}\n\nOwned weapons: ${guns}/${WEAPON_LIST.length}\nKills ${this.state.kills}\nMorph ${this.state.activeMorph ?? 'none'}\nCars ${this.state.ownedCars.join(',') || 'none'}\nFurniture ${this.state.furniture.length}`,
+        `INVENTORY\n${inv || 'empty'}\n\nShovel ${this.state.diggingEquipped ? 'ON' : 'OFF'} · uses ${this.state.shovelUses} · spare ${this.state.shovelCount}\nShells ${shells || 'none'}\nOwned weapons: ${guns}/${WEAPON_LIST.length}\nKills ${this.state.kills}\nMorph ${this.state.activeMorph ?? 'none'}\nCars ${this.state.ownedCars.join(',') || 'none'}`,
       );
     } else {
       this.panelText.setVisible(false);

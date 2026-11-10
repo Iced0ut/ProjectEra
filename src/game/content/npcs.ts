@@ -15,6 +15,8 @@ export type NpcRole =
   | 'vendor'
   | 'mail'
   | 'pizza'
+  | 'shell_shop'
+  | 'crab_shack'
   | 'citizen';
 
 export type BotKind =
@@ -172,12 +174,43 @@ export const CITY_NPCS: NpcDef[] = [
     tint: 0xff9a5a,
   },
   {
+    id: 'israfel_shells',
+    name: 'Isra Shells',
+    role: 'shell_shop',
+    x: 14,
+    y: 44,
+    lines: [
+      'Shovels are 50g. Equip with E here, dig on sand.',
+      'Trochus is the most common. Sell shells at my counter.',
+      'Buy several shovels — they break after enough digs.',
+    ],
+    tint: 0xffe08a,
+  },
+  {
+    id: 'bell_shells',
+    name: 'Bell Shells',
+    role: 'shell_shop',
+    x: 22,
+    y: 48,
+    lines: ['Second shack on the beach. Same shovel price: 50g.', 'Straight-line digging makes pickups easier.'],
+    tint: 0xf0d090,
+  },
+  {
+    id: 'wandi_crabs',
+    name: "Wandi's Crab Shack",
+    role: 'crab_shack',
+    x: 8,
+    y: 48,
+    lines: ['Sell crab shells here — 6g each color.', 'Crabs spawn while digging. Melee them for shells.'],
+    tint: 0xff8a5a,
+  },
+  {
     id: 'beach_bri',
     name: 'Bri',
     role: 'vendor',
     x: 10,
     y: 46,
-    lines: ['Dig shells, dodge crabs.', 'Crab bots respawn on the sand.'],
+    lines: ['Dig Trochus, Aerolata, Sand Dollars, Scallops, Starfish.', 'Watch for crabs — they hit for 3.'],
     tint: 0xffe08a,
   },
   {
@@ -273,19 +306,19 @@ export function createCityBots(): BotDef[] {
     });
   }
 
-  // Beach crabs
-  for (let i = 0; i < 10; i++) {
+  // Beach crabs (Era-style: ~3 damage, shell drops handled on kill)
+  for (let i = 0; i < 8; i++) {
     add({
       kind: 'beach_crab',
       name: `Crab ${i + 1}`,
       x: 2 + (i % 8) * 2.5,
       y: 46 + Math.floor(i / 8) * 3,
-      hp: 20,
+      hp: 18,
       speed: 55,
-      damage: 4,
-      aggro: 100,
-      respawnMs: 5000,
-      loot: 6,
+      damage: 3,
+      aggro: 110,
+      respawnMs: 6000,
+      loot: 2,
       tint: 0xff9a4a,
     });
   }

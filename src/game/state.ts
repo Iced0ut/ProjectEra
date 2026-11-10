@@ -60,6 +60,9 @@ export interface GameState {
   activeCar: string | null;
   activeMorph: string | null;
   equippedHat: string;
+  shovelCount: number;
+  shovelUses: number;
+  diggingEquipped: boolean;
   shieldUntil: number;
   speedBoostUntil: number;
   abilityReadyAt: number;
@@ -94,7 +97,16 @@ export function createInitialState(profile: PlayerProfile): GameState {
     clipLeft: WEAPONS.city_pistol.clip ?? 0,
     inventory: [
       { id: 'food', name: 'Street Snack', count: 5 },
-      { id: 'shell', name: 'Shell', count: 0 },
+      { id: 'trochus', name: 'Trochus', count: 0 },
+      { id: 'aerolata', name: 'Aerolata', count: 0 },
+      { id: 'sand_dollar', name: 'Sand Dollar', count: 0 },
+      { id: 'scallop', name: 'Scallop', count: 0 },
+      { id: 'starfish', name: 'Starfish', count: 0 },
+      { id: 'crab_shell_black', name: 'Black Crab Shell', count: 0 },
+      { id: 'crab_shell_blue', name: 'Blue Crab Shell', count: 0 },
+      { id: 'crab_shell_green', name: 'Green Crab Shell', count: 0 },
+      { id: 'crab_shell_red', name: 'Red Crab Shell', count: 0 },
+      { id: 'crab_shell_yellow', name: 'Yellow Crab Shell', count: 0 },
       { id: 'ore', name: 'Ore', count: 0 },
       { id: 'fish', name: 'Fish', count: 0 },
       { id: 'trash', name: 'Trash Bag', count: 0 },
@@ -121,6 +133,9 @@ export function createInitialState(profile: PlayerProfile): GameState {
     activeCar: null,
     activeMorph: null,
     equippedHat: 'none',
+    shovelCount: 0,
+    shovelUses: 0,
+    diggingEquipped: false,
     shieldUntil: 0,
     speedBoostUntil: 0,
     abilityReadyAt: 0,
@@ -128,8 +143,8 @@ export function createInitialState(profile: PlayerProfile): GameState {
     achievements: [],
     chatLog: [
       'System: Welcome to ProjectEra — original city sandbox inspired by Era systems.',
-      'System: Full weapon catalog with burn/poison/shock/slow/stun/lifesteal/knockback/heal/explode.',
-      'System: City is populated with NPCs, citizens, spar bots, rivals, crabs, and enforcers.',
+      'System: Digging: buy shovels at Shell Shack, dig sand for Trochus & more, sell at the counter.',
+      'System: Crabs can spawn while digging — kill them for crab shells (6g each).',
     ],
   };
 }
