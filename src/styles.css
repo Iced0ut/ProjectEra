@@ -58,22 +58,36 @@ body,
   inset: 0;
 }
 
+#game-root {
+  z-index: 1;
+}
+
 #game-root canvas {
   display: block;
   width: 100% !important;
   height: 100% !important;
   /* Keep world crisp without ugly nearest-neighbor UI upscale */
   image-rendering: auto;
+  pointer-events: auto;
 }
 
 #overlay-ui {
-  z-index: 5;
+  z-index: 20;
   pointer-events: none;
 }
 
-#overlay-ui .title-ui,
+#overlay-ui .title-ui {
+  pointer-events: auto;
+}
+
 #overlay-ui .title-ui * {
   pointer-events: auto;
+}
+
+/* While title is open, don't let the canvas steal clicks */
+body.title-open #game-root,
+body.title-open #game-root canvas {
+  pointer-events: none;
 }
 
 .hidden {

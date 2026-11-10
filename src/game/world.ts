@@ -213,24 +213,24 @@ export function createWorld(): WorldData {
   addBuilding(24, 180, 'building', 'Cave Entrance');
   addBuilding(70, 188, 'shop', 'South Shell Counter');
 
-  // Trees / rocks scatter (deterministic-ish)
-  for (let i = 0; i < 120; i++) {
+  // Light decor scatter (keep counts modest for load time)
+  for (let i = 0; i < 48; i++) {
     const x = 6 + ((i * 37) % 148);
     const y = 6 + ((i * 53) % 100);
     if (cells[y][x].tile === 'grass') objects.push({ type: 'tree', x: x * TILE, y: y * TILE });
   }
-  for (let i = 0; i < 40; i++) {
+  for (let i = 0; i < 24; i++) {
     const x = 25 + ((i * 19) % 100);
     const y = 140 + ((i * 23) % 50);
     if (cells[y]?.[x]?.tile === 'grass' || cells[y]?.[x]?.tile === 'mine') {
       objects.push({ type: 'rock', x: x * TILE, y: y * TILE });
     }
   }
-  for (let i = 0; i < 20; i++) {
+  for (let i = 0; i < 12; i++) {
     objects.push({
       type: 'crate',
-      x: (50 + (i % 10) * 2) * TILE,
-      y: (58 + Math.floor(i / 10) * 2) * TILE,
+      x: (50 + (i % 6) * 2) * TILE,
+      y: (58 + Math.floor(i / 6) * 2) * TILE,
     });
   }
 

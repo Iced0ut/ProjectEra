@@ -11,6 +11,7 @@ type TitleHandler = (choices: TitleChoices) => void;
 let inventoryOpen = false;
 let look = { hair: 0, shirt: 0, pants: 0, hat: 0 };
 let onEnter: TitleHandler | null = null;
+let initialized = false;
 
 function el<T extends HTMLElement>(id: string): T {
   const node = document.getElementById(id);
@@ -18,43 +19,79 @@ function el<T extends HTMLElement>(id: string): T {
   return node as T;
 }
 
+function readProfile(): PlayerProfile {
+  const name = el<HTMLInputElement>('player-name').value.trim().slice(0, 16) || 'Player';
+  return {
+    name,
+    hair: look.hair,
+    shirt: look.shirt,
+    pants: look.pants,
+    hat: look.hat,
+  };
+}
+
+function fireEnter(): void {
+  const profile = readProfile();
+  const btn = el<HTMLButtonElement>('enter-city');
+  btn.disabled = true;
+  btn.textContent = 'Loading city…';
+  // Let the browser paint the loading state before heavy world creation
+  requestAnimationFrame(() => {
+    window.setTimeout(() => {
+      if (onEnter) onEnter({ profile });
+      else window.dispatchEvent(new CustomEvent('projectera-enter', { detail: { profile } }));
+    }, 30);
+  });
+}
+
 export function initDomHud(): void {
+  if (initialized) {
+    // Rebind in case DOM was preserved across HMR
+    wireTitleControls();
+    return;
+  }
+  initialized = true;
+  wireTitleControls();
+}
+
+function wireTitleControls(): void {
   const grid = el<HTMLDivElement>('look-grid');
   grid.querySelectorAll('button[data-look]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const key = (btn as HTMLElement).dataset.look as keyof typeof look;
+    const button = btn as HTMLButtonElement;
+    button.onclick = () => {
+      const key = button.dataset.look as keyof typeof look;
       const max = key === 'hat' ? 5 : 6;
       look[key] = (look[key] + 1) % max;
-      const span = btn.querySelector('span');
+      const span = button.querySelector('span');
       if (span) span.textContent = String(look[key]);
-    });
+    };
   });
 
-  el<HTMLButtonElement>('enter-city').addEventListener('click', () => {
-    const name = el<HTMLInputElement>('player-name').value.trim().slice(0, 16) || 'Player';
-    onEnter?.({
-      profile: {
-        name,
-        hair: look.hair,
-        shirt: look.shirt,
-        pants: look.pants,
-        hat: look.hat,
-      },
-    });
-  });
+  const enter = el<HTMLButtonElement>('enter-city');
+  enter.onclick = (ev) => {
+    ev.preventDefault();
+    ev.stopPropagation();
+    fireEnter();
+  };
 }
 
 export function showTitle(handler: TitleHandler): void {
   onEnter = handler;
+  document.body.classList.add('title-open');
   el('title-ui').classList.remove('hidden');
   el('play-ui').classList.add('hidden');
+  const btn = el<HTMLButtonElement>('enter-city');
+  btn.disabled = false;
+  btn.textContent = 'Enter City';
 }
 
 export function hideTitle(): void {
+  document.body.classList.remove('title-open');
   el('title-ui').classList.add('hidden');
 }
 
 export function showPlayHud(): void {
+  document.body.classList.remove('title-open');
   el('play-ui').classList.remove('hidden');
   el('title-ui').classList.add('hidden');
 }

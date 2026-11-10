@@ -98,12 +98,14 @@ export class WorldScene extends Phaser.Scene {
 
     this.solids = this.physics.add.staticGroup();
     for (const obj of this.world.objects) {
+      // Decor only for trees/rocks/crates — collide with buildings/shops/houses
+      if (obj.type === 'tree' || obj.type === 'rock' || obj.type === 'crate' || obj.type === 'furniture') {
+        this.add.image(obj.x + 16, obj.y + 16, obj.type).setDepth(obj.y);
+        continue;
+      }
       const sprite = this.solids.create(obj.x + 16, obj.y + 16, obj.type) as Phaser.Physics.Arcade.Sprite;
       sprite.setDepth(obj.y);
-      if (obj.type === 'tree') sprite.setSize(18, 16).setOffset(7, 28);
-      if (obj.type === 'building' || obj.type === 'shop' || obj.type === 'house') {
-        sprite.setSize(50, 36).setOffset(7, 24);
-      }
+      sprite.setSize(50, 36).setOffset(7, 24);
     }
 
     this.player = this.physics.add.sprite(this.world.spawn.x, this.world.spawn.y, 'player');
@@ -258,28 +260,32 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private drawTiles(): void {
-    const keyFor = {
-      grass: 'tile-grass',
-      path: 'tile-path',
-      road: 'tile-road',
-      sidewalk: 'tile-sidewalk',
-      water: 'tile-water',
-      sand: 'tile-sand',
-      pk: 'tile-pk',
-      safe: 'tile-safe',
-      spar: 'tile-spar',
-      gang: 'tile-gang',
-      snow: 'tile-snow',
-      bridge: 'tile-bridge',
-      mine: 'tile-mine',
-    } as const;
-
-    // One render texture instead of tens of thousands of sprites
-    const rt = this.add.renderTexture(0, 0, MAP_W * TILE, MAP_H * TILE).setOrigin(0, 0).setDepth(0);
+    // Fast span-filled ground (avoids 30k+ texture stamps that freeze the tab)
+    const colors: Record<string, number> = {
+      grass: 0x3f7a45,
+      path: 0x8a7a5c,
+      road: 0x4a4f58,
+      sidewalk: 0x6b7280,
+      water: 0x2a6f9e,
+      sand: 0xd2b48c,
+      pk: 0x4a2030,
+      safe: 0x2a4a3a,
+      spar: 0x3a2a55,
+      gang: 0x553020,
+      snow: 0xdce8f5,
+      bridge: 0x6b5a45,
+      mine: 0x3a3a42,
+    };
+    const g = this.add.graphics().setDepth(0);
     for (let y = 0; y < MAP_H; y++) {
-      for (let x = 0; x < MAP_W; x++) {
-        const cell = this.world.cells[y][x];
-        rt.draw(keyFor[cell.tile], x * TILE, y * TILE);
+      let x = 0;
+      while (x < MAP_W) {
+        const tile = this.world.cells[y][x].tile;
+        let x2 = x + 1;
+        while (x2 < MAP_W && this.world.cells[y][x2].tile === tile) x2 += 1;
+        g.fillStyle(colors[tile] ?? 0x3f7a45, 1);
+        g.fillRect(x * TILE, y * TILE, (x2 - x) * TILE, TILE);
+        x = x2;
       }
     }
   }
