@@ -202,13 +202,13 @@ export class WorldScene extends Phaser.Scene {
     this.applyCustomization();
 
     this.nameTag = this.add
-      .text(this.player.x, this.player.y - 28, this.state.profile.name, {
+      .text(this.player.x, this.player.y - 18, this.state.profile.name, {
         fontFamily: 'Sora, sans-serif',
-        fontSize: '13px',
+        fontSize: '6px',
         fontStyle: '600',
         color: '#eef4ff',
         stroke: '#071018',
-        strokeThickness: 4,
+        strokeThickness: 2,
       })
       .setOrigin(0.5)
       .setDepth(1001)
@@ -275,7 +275,7 @@ export class WorldScene extends Phaser.Scene {
     this.updateBots(time, dt);
     this.updateCitizens(time);
     this.tickPlayerStatus(time, dt);
-    this.nameTag.setPosition(this.player.x, this.player.y - 28);
+    this.nameTag.setPosition(this.player.x, this.player.y - 18);
     this.player.setDepth(this.player.y);
 
     this.tickReload(time);
@@ -336,13 +336,13 @@ export class WorldScene extends Phaser.Scene {
       sprite.setDepth(npc.y * TILE);
       sprite.setDisplaySize(32, 32);
       const tag = this.add
-        .text(npc.x * TILE, npc.y * TILE - 26, npc.name, {
+        .text(npc.x * TILE, npc.y * TILE - 18, npc.name, {
           fontFamily: 'Sora, sans-serif',
-          fontSize: '11px',
+          fontSize: '6px',
           fontStyle: '600',
           color: '#f0c14b',
           stroke: '#071018',
-          strokeThickness: 3,
+          strokeThickness: 2,
         })
         .setOrigin(0.5)
         .setDepth(npc.y * TILE + 1)
@@ -365,13 +365,13 @@ export class WorldScene extends Phaser.Scene {
       spr.setDisplaySize(32, 32);
       spr.setSize(16, 12).setOffset(4, 18);
       const tag = this.add
-        .text(c.x * TILE, c.y * TILE - 22, c.name, {
+        .text(c.x * TILE, c.y * TILE - 18, c.name, {
           fontFamily: 'Sora, sans-serif',
-          fontSize: '10px',
+          fontSize: '6px',
           fontStyle: '500',
           color: '#cfe0ff',
           stroke: '#071018',
-          strokeThickness: 3,
+          strokeThickness: 2,
         })
         .setOrigin(0.5)
         .setDepth(c.y * TILE + 1)
