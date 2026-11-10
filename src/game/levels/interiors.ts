@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { LEVEL_TILES, TILE } from '../config';
+import { LEVEL_TILES, MAP_H, TILE } from '../config';
 
 /**
  * Each building opens a 64×64 level dressed for that shop or base.
@@ -463,4 +463,5 @@ export function paintInteriorTexture(scene: Phaser.Scene, level: InteriorLevel):
 }
 
 export const INTERIOR_ORIGIN_X = 0;
-export const INTERIOR_ORIGIN_Y = 80 * TILE;
+/** Below the outdoor continent so a building level never overlaps the world. */
+export const INTERIOR_ORIGIN_Y = (MAP_H + 8) * TILE;

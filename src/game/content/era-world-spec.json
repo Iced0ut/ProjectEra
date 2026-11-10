@@ -1,23 +1,19 @@
 {
-  "note": "Provisional ProjectEra layout. These coordinates are not surveyed GraalOnline Era originals. Position accuracy is project-defined until a real survey exists. Base name and current owner gang are separate fields.",
+  "note": "Original ProjectEra continent. Coordinates are not surveyed GraalOnline Era or classic Deteria tiles. The silhouette is inspired by a public overworld overview: ocean, a river-split landmass, forests, roads, a northern lake, a northeast crater, a southern keep, and outlying islands.",
   "outdoor": {
-    "worldWidthPx": 2352,
-    "worldHeightPx": 1008,
+    "worldWidthPx": 8192,
+    "worldHeightPx": 4608,
     "tileSizePx": 16,
-    "columns": 147,
-    "rows": 63,
-    "tileCount": 9261,
-    "levelSlices": [
-      { "x": 0, "columns": 64, "rows": 63 },
-      { "x": 64, "columns": 64, "rows": 63 },
-      { "x": 128, "columns": 19, "rows": 63 }
-    ],
-    "arrangement": "west Northridge, center channel and bridge, east Southridge"
+    "columns": 512,
+    "rows": 288,
+    "tileCount": 147456,
+    "levelTiles": 64,
+    "actorPx": 22,
+    "cameraZoom": 1.35,
+    "arrangement": "Northridge west of the river, channel on the bridges, Southridge to the east, islands offshore"
   },
   "spawn": {
     "place": "Starter Area",
-    "tile": { "x": 56, "y": 47 },
-    "pixel": { "x": 904, "y": 760 },
     "surface": "sidewalk",
     "noPk": true,
     "positionStatus": "provisional"

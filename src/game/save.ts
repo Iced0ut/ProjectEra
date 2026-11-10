@@ -1,3 +1,4 @@
+import { MAP_REVISION } from './config';
 import { createInitialState, type GameState, type InventoryItem, type PlayerProfile } from './state';
 
 const KEY = 'projectera-save-v1';
@@ -43,6 +44,9 @@ export function loadOrCreate(profile: PlayerProfile): GameState {
       chatLog: fresh.chatLog,
       combatNote: '',
       hp: typeof saved.hp === 'number' ? saved.hp : fresh.hp,
+      worldX: saved.mapRevision === MAP_REVISION && typeof saved.worldX === 'number' ? saved.worldX : null,
+      worldY: saved.mapRevision === MAP_REVISION && typeof saved.worldY === 'number' ? saved.worldY : null,
+      mapRevision: MAP_REVISION,
     };
   } catch {
     return fresh;

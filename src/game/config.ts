@@ -1,11 +1,21 @@
 /** Graal tile: 16×16 px. A level is 64×64 tiles (1024×1024 px). */
 export const TILE = 16;
 export const LEVEL_TILES = 64;
-/** Exported GMap raster, exact. */
-export const MAP_PX_W = 2352;
-export const MAP_PX_H = 1008;
-export const MAP_W = MAP_PX_W / TILE;
-export const MAP_H = MAP_PX_H / TILE;
+/**
+ * Outdoor continent. 512×288 tiles = 8×4.5 levels.
+ * Pixel size stays inside common GPU texture chunks (drawn as 2048px pieces).
+ * This is an original layout, not a traced game map.
+ */
+export const MAP_W = 512;
+export const MAP_H = 288;
+export const MAP_PX_W = MAP_W * TILE;
+export const MAP_PX_H = MAP_H * TILE;
+/** Bump when outdoor coordinates change so old saves respawn in the plaza. */
+export const MAP_REVISION = 2;
+/** World zoom. Lower than 2 so a 22px actor does not fill the view. */
+export const CAMERA_ZOOM = 1.35;
+/** Actor draw size in world pixels. A bit over one tile, smaller than a house. */
+export const ACTOR_PX = 22;
 export const PLAYER_HP = 50;
 export const PLAYER_SPEED = 96;
 export const ATTACK_COOLDOWN_MS = 280;

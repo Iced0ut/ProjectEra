@@ -1,4 +1,6 @@
-/** City population spread across Northridge + Southridge. */
+/** City population spread across the continent. */
+
+import { districtById, type DistrictId } from './districts';
 
 export type NpcRole =
   | 'guide'
@@ -64,9 +66,9 @@ export const CITY_NPCS: NpcDef[] = [
     x: 80,
     y: 77,
     lines: [
-      'You spawn in the Starter Area (safe plaza) — not the beach.',
-      'WASD move, Space attack, Q ability, E talk. Dig shells on Mercy Beach, south shore.',
-      'Southridge is east across the bridge, or take the subway pad.',
+      'You spawn in the Starter Area plaza — not on the sand.',
+      'WASD move, Space attack, Q ability, E talk. Dig shells on Mercy Beach, the south shore.',
+      'Southridge is east across the river bridges, or take the subway pad.',
     ],
   },
   {
@@ -346,64 +348,66 @@ export const CITY_NPCS: NpcDef[] = [
 ];
 
 export const AMBIENT_CITIZEN_SPOTS: { x: number; y: number; name: string }[] = [
-  { x: 50, y: 44, name: 'Jay' },
-  { x: 56, y: 45, name: 'Nia' },
-  { x: 48, y: 47, name: 'Oz' },
-  { x: 58, y: 44, name: 'Quin' },
-  { x: 44, y: 43, name: 'Rae' },
-  { x: 62, y: 46, name: 'Sky' },
-  { x: 30, y: 44, name: 'Tess' },
-  { x: 8, y: 44, name: 'Uma' },
-  { x: 32, y: 30, name: 'Vic' },
-  { x: 48, y: 30, name: 'Wes' },
-  { x: 6, y: 16, name: 'Ash' },
-  { x: 66, y: 6, name: 'Bea' },
-  { x: 8, y: 6, name: 'Cid' },
-  { x: 128, y: 8, name: 'Dot' },
-  { x: 26, y: 16, name: 'Eli' },
-  { x: 8, y: 56, name: 'Flo' },
-  { x: 56, y: 56, name: 'Gus' },
-  { x: 130, y: 10, name: 'Hana' },
-  { x: 136, y: 12, name: 'Ivo' },
-  { x: 116, y: 20, name: 'Jules' },
-  { x: 134, y: 20, name: 'Kira' },
-  { x: 118, y: 36, name: 'Lex' },
-  { x: 134, y: 36, name: 'Moe' },
-  { x: 120, y: 52, name: 'Nyx' },
+  ...crowd('start_park', ['Jay', 'Nia', 'Oz', 'Quin', 'Rae']),
+  ...crowd('downtown', ['Sky', 'Tess', 'Uma']),
+  ...crowd('fashion_mall', ['Vic', 'Wes']),
+  ...crowd('harbour', ['Flo', 'Gus']),
+  ...crowd('airport', ['Ash', 'Cid']),
+  ...crowd('snow_resort', ['Bea', 'Eli']),
+  ...crowd('southridge', ['Dot', 'Hana', 'Ivo']),
+  ...crowd('south_beach', ['Nyx', 'Jules']),
+  ...crowd('mercy_beach', ['Kira', 'Lex']),
 ];
 
+function crowd(id: DistrictId, names: string[]): { x: number; y: number; name: string }[] {
+  const d = districtById(id);
+  const y = d.y + Math.max(1, Math.floor(d.h / 2));
+  return names.map((name, i) => ({
+    x: Math.min(d.x + d.w - 2, d.x + 2 + i * 2),
+    y,
+    name,
+  }));
+}
+
+function at(id: DistrictId, ox: number, oy: number): [number, number] {
+  const d = districtById(id);
+  const y = d.y + Math.max(1, Math.min(d.h - 2, Math.floor(d.h / 2) + (oy % 2)));
+  const x = d.x + Math.max(1, Math.min(d.w - 2, ox));
+  return [x, y];
+}
+
 const NPC_SPOTS: Record<string, [number, number]> = {
-  guide_g: [54, 45],
-  vendor_vee: [28, 44],
-  simon_melee: [30, 45],
-  exotic_aria: [32, 44],
-  job_bot: [56, 46],
-  officer_lane: [44, 45],
-  car_dealer: [74, 43],
-  fashion_faye: [48, 31],
-  hat_hiro: [52, 31],
-  mailman_mo: [58, 46],
-  pizza_pat: [52, 48],
-  spar_host: [8, 32],
-  event_announcer: [68, 31],
-  warp_subway_n: [50, 36],
-  israfel_shells: [54, 56],
-  bell_shells: [60, 56],
-  wandi_crabs: [10, 58],
-  beach_bri: [58, 57],
-  capo_gz: [86, 32],
-  capo_tachi: [76, 18],
-  capo_bh: [26, 55],
-  capo_bbz: [86, 54],
-  south_guide: [128, 6],
-  south_pizza: [136, 10],
-  south_shells: [122, 52],
-  mine_foreman: [116, 20],
-  pirate_boss: [134, 20],
-  guerre_boss: [116, 36],
-  neo_boss: [134, 36],
-  cave_keeper: [114, 6],
-  warp_subway_s: [132, 12],
+  guide_g: at('start_park', 6, 5),
+  vendor_vee: at('gun_row', 8, 4),
+  simon_melee: at('gun_row', 12, 6),
+  exotic_aria: at('gun_row', 6, 8),
+  job_bot: at('start_park', 14, 6),
+  officer_lane: at('start_park', 4, 8),
+  car_dealer: at('car_row', 8, 6),
+  fashion_faye: at('fashion_mall', 8, 5),
+  hat_hiro: at('fashion_mall', 14, 6),
+  mailman_mo: at('start_park', 16, 4),
+  pizza_pat: at('downtown', 12, 22),
+  spar_host: at('spar_complex', 12, 8),
+  event_announcer: at('event_house', 10, 6),
+  warp_subway_n: at('subway', 6, 4),
+  israfel_shells: at('mercy_beach', 12, 5),
+  bell_shells: at('mercy_beach', 30, 7),
+  wandi_crabs: at('mercy_beach', 50, 5),
+  beach_bri: at('mercy_beach', 20, 8),
+  capo_gz: at('gz', 8, 6),
+  capo_tachi: at('tachi', 10, 6),
+  capo_bh: at('blackholst', 8, 6),
+  capo_bbz: at('bbz', 8, 6),
+  south_guide: at('southridge', 8, 8),
+  south_pizza: at('southridge', 28, 10),
+  south_shells: at('south_beach', 16, 6),
+  mine_foreman: at('south_mines', 10, 10),
+  pirate_boss: at('pirate_zone', 10, 6),
+  guerre_boss: at('guerre', 10, 6),
+  neo_boss: at('neo', 10, 6),
+  cave_keeper: at('cave_coast', 8, 6),
+  warp_subway_s: at('southridge', 14, 18),
 };
 
 for (const npc of CITY_NPCS) {
@@ -421,14 +425,15 @@ export function createCityBots(): BotDef[] {
     n += 1;
     bots.push({ id: partial.id ?? `bot_${n}`, ...partial });
   };
+  const d = districtById;
 
-  // Spar Complex
-  for (let i = 0; i < 12; i++) {
+  const spar = d('spar_complex');
+  for (let i = 0; i < 8; i++) {
     add({
       kind: 'spar_bot',
       name: `Spar Bot ${i + 1}`,
-      x: 6 + (i % 6) * 2,
-      y: 30 + Math.floor(i / 6) * 3,
+      x: spar.x + 3 + (i % 4) * 4,
+      y: spar.y + 3 + Math.floor(i / 4) * 5,
       hp: 50,
       speed: 70,
       damage: 5,
@@ -439,13 +444,27 @@ export function createCityBots(): BotDef[] {
     });
   }
 
-  // Street rivals on north roads
-  for (let i = 0; i < 18; i++) {
+  const rivals = [
+    ['parkland', 8, 8],
+    ['skate_park', 6, 6],
+    ['hotel_row', 6, 6],
+    ['car_row', 6, 6],
+    ['gun_row', 6, 4],
+    ['harbour', 8, 4],
+    ['southridge', 8, 6],
+    ['cave_coast', 6, 6],
+    ['south_mines', 8, 8],
+    ['water_park', 6, 6],
+    ['power_plant', 6, 6],
+    ['auction', 8, 4],
+  ] as const;
+  rivals.forEach(([id, ox], i) => {
+    const spot = d(id);
     add({
       kind: 'street_rival',
       name: `Rival ${i + 1}`,
-      x: 8 + (i * 5) % 80,
-      y: 26 + (i % 2),
+      x: spot.x + Math.min(spot.w - 2, ox),
+      y: spot.y + Math.floor(spot.h / 2),
       hp: 40,
       speed: 85,
       damage: 6,
@@ -454,24 +473,17 @@ export function createCityBots(): BotDef[] {
       loot: 12,
       tint: 0xff6b4a,
     });
-  }
+  });
 
-  // Gang enforcers at north bases
-  const bases = [
-    { x: 84, y: 32, name: 'GZ' },
-    { x: 74, y: 18, name: 'Tachi' },
-    { x: 24, y: 54, name: 'BH' },
-    { x: 86, y: 52, name: 'BBZ' },
-    { x: 56, y: 18, name: 'Lethal' },
-    { x: 40, y: 18, name: 'Mafia' },
-  ];
-  bases.forEach((b, bi) => {
-    for (let i = 0; i < 3; i++) {
+  const bases = ['gz', 'tachi', 'blackholst', 'bbz', 'lethal', 'mafia', 'pirate_zone', 'guerre', 'neo', 'box_factory'] as const;
+  bases.forEach((id) => {
+    const spot = d(id);
+    for (let i = 0; i < 2; i++) {
       add({
         kind: 'gang_enforcer',
-        name: `${b.name} Enforcer ${i + 1}`,
-        x: b.x + i * 2,
-        y: b.y + (i % 2),
+        name: `${spot.name.split(' ')[0]} Guard ${i + 1}`,
+        x: spot.x + 3 + i * 3,
+        y: spot.y + Math.floor(spot.h / 2),
         hp: 55,
         speed: 90,
         damage: 7,
@@ -481,16 +493,15 @@ export function createCityBots(): BotDef[] {
         tint: 0xff4040,
       });
     }
-    void bi;
   });
 
-  // Mercy Beach crabs
-  for (let i = 0; i < 12; i++) {
+  const mercy = d('mercy_beach');
+  for (let i = 0; i < 8; i++) {
     add({
       kind: 'beach_crab',
       name: `Mercy Crab ${i + 1}`,
-      x: 54 + (i % 6) * 2,
-      y: 55 + Math.floor(i / 6),
+      x: mercy.x + 6 + (i % 4) * 8,
+      y: mercy.y + 4 + Math.floor(i / 4) * 4,
       hp: 18,
       speed: 55,
       damage: 3,
@@ -500,14 +511,13 @@ export function createCityBots(): BotDef[] {
       tint: 0xff9a4a,
     });
   }
-
-  // South beach crabs
-  for (let i = 0; i < 8; i++) {
+  const southSand = d('south_beach');
+  for (let i = 0; i < 6; i++) {
     add({
       kind: 'beach_crab',
       name: `South Crab ${i + 1}`,
-      x: 116 + i * 3,
-      y: 52,
+      x: southSand.x + 8 + i * 6,
+      y: southSand.y + 6,
       hp: 18,
       speed: 55,
       damage: 3,
@@ -518,13 +528,13 @@ export function createCityBots(): BotDef[] {
     });
   }
 
-  // Police near hospitals / start
-  for (let i = 0; i < 8; i++) {
+  const plaza = d('start_park');
+  for (let i = 0; i < 4; i++) {
     add({
       kind: 'police_bot',
       name: `Patrol ${i + 1}`,
-      x: 42 + i * 2,
-      y: 44 + (i % 2),
+      x: plaza.x + 3 + i * 4,
+      y: plaza.y + 10,
       hp: 60,
       speed: 95,
       damage: 6,
@@ -535,60 +545,13 @@ export function createCityBots(): BotDef[] {
     });
   }
 
-  // Southridge gang bots
+  const mines = d('south_mines');
   for (let i = 0; i < 6; i++) {
-    add({
-      kind: 'gang_enforcer',
-      name: `Pirate Guard ${i + 1}`,
-      x: 132 + (i % 3) * 2,
-      y: 18 + Math.floor(i / 3) * 3,
-      hp: 55,
-      speed: 88,
-      damage: 7,
-      aggro: 230,
-      respawnMs: 7000,
-      loot: 14,
-      tint: 0xff5050,
-    });
-  }
-  for (let i = 0; i < 5; i++) {
-    add({
-      kind: 'gang_enforcer',
-      name: `Guerre Guard ${i + 1}`,
-      x: 114 + i * 2,
-      y: 36,
-      hp: 55,
-      speed: 88,
-      damage: 7,
-      aggro: 230,
-      respawnMs: 7000,
-      loot: 14,
-      tint: 0xff5050,
-    });
-  }
-  for (let i = 0; i < 5; i++) {
-    add({
-      kind: 'gang_enforcer',
-      name: `Neo Guard ${i + 1}`,
-      x: 132 + i * 2,
-      y: 36,
-      hp: 55,
-      speed: 88,
-      damage: 7,
-      aggro: 230,
-      respawnMs: 7000,
-      loot: 14,
-      tint: 0xff5050,
-    });
-  }
-
-  // Mine pests
-  for (let i = 0; i < 10; i++) {
     add({
       kind: 'mine_pest',
       name: `Mine Pest ${i + 1}`,
-      x: 114 + (i % 5) * 2,
-      y: 18 + Math.floor(i / 5) * 3,
+      x: mines.x + 4 + (i % 3) * 6,
+      y: mines.y + 4 + Math.floor(i / 3) * 6,
       hp: 25,
       speed: 60,
       damage: 4,
@@ -599,13 +562,13 @@ export function createCityBots(): BotDef[] {
     });
   }
 
-  // Training dummies at gun row
-  for (let i = 0; i < 4; i++) {
+  const guns = d('gun_row');
+  for (let i = 0; i < 3; i++) {
     add({
       kind: 'training_dummy',
       name: `Dummy ${i + 1}`,
-      x: 26 + i * 2,
-      y: 46,
+      x: guns.x + 4 + i * 4,
+      y: guns.y + 8,
       hp: 999,
       speed: 0,
       damage: 0,
@@ -616,13 +579,13 @@ export function createCityBots(): BotDef[] {
     });
   }
 
-  // Event bots near event house
-  for (let i = 0; i < 6; i++) {
+  const event = d('event_house');
+  for (let i = 0; i < 4; i++) {
     add({
       kind: 'event_bot',
       name: `Arena Bot ${i + 1}`,
-      x: 66 + (i % 3) * 2,
-      y: 30 + Math.floor(i / 3) * 2,
+      x: event.x + 4 + (i % 2) * 6,
+      y: event.y + 4 + Math.floor(i / 2) * 4,
       hp: 45,
       speed: 80,
       damage: 5,

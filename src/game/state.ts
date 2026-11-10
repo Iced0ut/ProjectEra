@@ -1,3 +1,4 @@
+import { MAP_REVISION } from './config';
 import { WEAPONS } from './content/weapons';
 
 export type JobId =
@@ -82,6 +83,8 @@ export interface GameState {
   /** Last outdoor position. Null until the player has stood on the city map. */
   worldX: number | null;
   worldY: number | null;
+  /** Which outdoor layout those coordinates belong to. */
+  mapRevision: number;
 }
 
 const JOBS: JobId[] = [
@@ -170,6 +173,7 @@ export function createInitialState(profile: PlayerProfile): GameState {
     bankPaidAt: 0,
     worldX: null,
     worldY: null,
+    mapRevision: MAP_REVISION,
     chatLog: [
       'System: Welcome to ProjectEra — you are in the Starter Area (safe plaza).',
       'System: Digging is at Mercy Beach / Southridge Beach — not here. Buy shovels at Shell Shack.',

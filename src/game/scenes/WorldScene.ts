@@ -1,5 +1,7 @@
 import Phaser from 'phaser';
 import {
+  ACTOR_PX,
+  CAMERA_ZOOM,
   DASH_COOLDOWN_MS,
   DASH_MS,
   DASH_SPEED,
@@ -176,14 +178,16 @@ export class WorldScene extends Phaser.Scene {
         this.add.image(obj.x + TILE, obj.y + TILE, obj.type).setDepth(obj.y);
         continue;
       }
-      const sprite = this.solids.create(obj.x + TILE, obj.y + TILE + 10, obj.type) as Phaser.Physics.Arcade.Sprite;
+      const fw = obj.footprintW ?? 46;
+      const fh = obj.footprintH ?? 26;
+      const sprite = this.solids.create(obj.x + TILE, obj.y + TILE + 8, obj.type) as Phaser.Physics.Arcade.Sprite;
       sprite.setDepth(obj.y + 10);
-      sprite.setDisplaySize(obj.footprintW ?? 28, obj.footprintH ?? 16);
-      sprite.setSize(18, 10).setOffset(5, 4);
-      const roof = this.add.image(obj.x + TILE, obj.y, 'roof').setDepth(120000);
-      roof.setDisplaySize((obj.footprintW ?? 28) + 16, 14);
+      sprite.setDisplaySize(fw, fh);
+      sprite.setSize(Math.round(fw * 0.55), 12).setOffset(Math.round(fw * 0.2), 6);
+      const roof = this.add.image(obj.x + TILE, obj.y - 2, 'roof').setDepth(120000);
+      roof.setDisplaySize(fw + 10, 16);
       const doorX = obj.x + TILE;
-      const doorY = obj.y + TILE + 28;
+      const doorY = obj.y + TILE + fh * 0.35;
       const kind = interiorKindFor(obj.label ?? 'Building', obj.type);
       this.doors.push({ x: doorX, y: doorY, label: obj.label ?? 'Building', kind });
       this.add.rectangle(doorX, doorY, 16, 8, 0xe6c85a).setDepth(doorY);
@@ -235,7 +239,7 @@ export class WorldScene extends Phaser.Scene {
 
     this.cameras.main.startFollow(this.player, true, 0.12, 0.12);
     this.cameras.main.setBounds(0, 0, MAP_W * TILE, MAP_H * TILE);
-    this.cameras.main.setZoom(2);
+    this.cameras.main.setZoom(CAMERA_ZOOM);
 
     if (!this.input.keyboard) throw new Error('Keyboard required');
     this.cursors = this.input.keyboard.createCursorKeys();
@@ -250,7 +254,7 @@ export class WorldScene extends Phaser.Scene {
     this.game.events.emit('era-state', this.state);
     this.pushChat(`Spawned at Starter Area · ${DISTRICTS.length} districts · ${MAP_W}x${MAP_H} tiles.`);
     this.pushChat(`${CITY_NPCS.length} NPCs · ${AMBIENT_CITIZEN_SPOTS.length} citizens · ${createCityBots().length} bots.`);
-    this.pushChat('Mercy Beach is along the south shore. Cross the bridge east into Southridge.');
+    this.pushChat('Mercy Beach is the south shore. Cross a river bridge east into Southridge.');
     this.pushChat('Timed jobs: trash piles, South Mines ore, Auto Mile assembly. Your city saves on this computer.');
     this.pushChat('Gold mats are doors. E enters that building as its own 64×64 level.');
     this.pushChat('Cave Entrance is the Sea Dungeon. Event House runs Plasma waves. Job Bot shows daily challenges.');
@@ -334,7 +338,7 @@ export class WorldScene extends Phaser.Scene {
       const key = this.sheetFor(`${npc.id}`, this.lookFromSeed(npc.id.length + npc.x, npc.role === 'police' ? 1 : 0));
       const sprite = this.physics.add.staticImage(npc.x * TILE, npc.y * TILE, key, 0);
       sprite.setDepth(npc.y * TILE);
-      sprite.setDisplaySize(32, 32);
+      sprite.setDisplaySize(ACTOR_PX, ACTOR_PX);
       const tag = this.add
         .text(npc.x * TILE, npc.y * TILE - 18, npc.name, {
           fontFamily: 'Sora, sans-serif',
@@ -362,7 +366,7 @@ export class WorldScene extends Phaser.Scene {
       spr.homeY = c.y * TILE;
       spr.wanderAt = 0;
       spr.setDepth(c.y * TILE);
-      spr.setDisplaySize(32, 32);
+      spr.setDisplaySize(ACTOR_PX, ACTOR_PX);
       spr.setSize(16, 12).setOffset(4, 18);
       const tag = this.add
         .text(c.x * TILE, c.y * TILE - 18, c.name, {
@@ -407,7 +411,7 @@ export class WorldScene extends Phaser.Scene {
       if (bot.tint) spr.setTint(bot.tint);
       spr.setSize(16, 12).setOffset(4, 6);
     } else {
-      spr.setDisplaySize(32, 32);
+      spr.setDisplaySize(ACTOR_PX, ACTOR_PX);
       spr.setSize(14, 10).setOffset(9, 18);
     }
     spr.setData('label', bot.name);
@@ -415,14 +419,9 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private drawTiles(): void {
-    // One 2352×1008 ground canvas. Built once. Not refreshed per tile or per frame.
+    // Ground is baked once into 2048px chunks so the continent can exceed one GPU texture.
     const started = performance.now();
-    const canvas = document.createElement('canvas');
-    canvas.width = MAP_PX_W;
-    canvas.height = MAP_PX_H;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    ctx.imageSmoothingEnabled = false;
+    const chunk = 2048;
     const sources = new Map<string, CanvasImageSource>();
     const sourceFor = (key: string): CanvasImageSource | null => {
       const cached = sources.get(key);
@@ -432,22 +431,52 @@ export class WorldScene extends Phaser.Scene {
       sources.set(key, image);
       return image;
     };
-    for (let y = 0; y < MAP_H; y++) {
-      for (let x = 0; x < MAP_W; x++) {
-        const tile = this.world.cells[y][x].tile;
-        const alt = (x + y) % 2 === 1;
-        let key = `tile-${tile}`;
-        if (alt && this.textures.exists(`${key}-b`)) key = `${key}-b`;
-        const image = sourceFor(key) ?? sourceFor('tile-grass');
-        if (image) ctx.drawImage(image, x * TILE, y * TILE);
+    const cols = Math.ceil(MAP_PX_W / chunk);
+    const rows = Math.ceil(MAP_PX_H / chunk);
+    for (let cy = 0; cy < rows; cy++) {
+      for (let cx = 0; cx < cols; cx++) {
+        const originX = cx * chunk;
+        const originY = cy * chunk;
+        const width = Math.min(chunk, MAP_PX_W - originX);
+        const height = Math.min(chunk, MAP_PX_H - originY);
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) continue;
+        ctx.imageSmoothingEnabled = false;
+        const x0 = originX / TILE;
+        const y0 = originY / TILE;
+        const x1 = Math.min(MAP_W, x0 + width / TILE);
+        const y1 = Math.min(MAP_H, y0 + height / TILE);
+        for (let y = y0; y < y1; y++) {
+          for (let x = x0; x < x1; x++) {
+            const cell = this.world.cells[y][x];
+            const alt = (x + y) % 2 === 1;
+            let key = `tile-${cell.tile}`;
+            if (alt && this.textures.exists(`${key}-b`)) key = `${key}-b`;
+            const image = sourceFor(key) ?? sourceFor('tile-grass');
+            const px = x * TILE - originX;
+            const py = y * TILE - originY;
+            if (image) ctx.drawImage(image, px, py);
+            if (cell.stamp === 'tree') {
+              const tree = sourceFor('tree');
+              if (tree) ctx.drawImage(tree, px, py);
+            } else if (cell.stamp === 'rock') {
+              const rock = sourceFor('rock');
+              if (rock) ctx.drawImage(rock, px, py);
+            }
+          }
+        }
+        const key = `world-ground-${cx}-${cy}`;
+        if (this.textures.exists(key)) this.textures.remove(key);
+        const texture = this.textures.addCanvas(key, canvas);
+        texture?.setFilter(Phaser.Textures.FilterMode.NEAREST);
+        this.add.image(originX, originY, key).setOrigin(0, 0).setDepth(0);
       }
     }
-    if (this.textures.exists('world-ground')) this.textures.remove('world-ground');
-    const texture = this.textures.addCanvas('world-ground', canvas);
-    texture?.setFilter(Phaser.Textures.FilterMode.NEAREST);
-    this.add.image(0, 0, 'world-ground').setOrigin(0, 0).setDepth(0);
     console.info(
-      `[projectera] ground ${canvas.width}x${canvas.height} tiles=${MAP_W * MAP_H} buildMs=${(performance.now() - started).toFixed(1)}`,
+      `[projectera] ground ${MAP_PX_W}x${MAP_PX_H} chunks=${cols * rows} tiles=${MAP_W * MAP_H} buildMs=${(performance.now() - started).toFixed(1)}`,
     );
   }
 
@@ -456,11 +485,11 @@ export class WorldScene extends Phaser.Scene {
       this.add
         .text(label.x, label.y, label.text, {
           fontFamily: 'Sora, sans-serif',
-          fontSize: label.text.includes('RIDGE') ? '22px' : '12px',
+          fontSize: '8px',
           fontStyle: '700',
           color: label.color,
           stroke: '#071018',
-          strokeThickness: 5,
+          strokeThickness: 2,
         })
         .setOrigin(0.5, 0)
         .setDepth(5)
@@ -478,11 +507,11 @@ export class WorldScene extends Phaser.Scene {
       this.add
         .text(cx, cy - 22, pad.label, {
           fontFamily: 'Sora, sans-serif',
-          fontSize: '11px',
+          fontSize: '7px',
           fontStyle: '600',
           color: '#cfe0ff',
           stroke: '#071018',
-          strokeThickness: 4,
+          strokeThickness: 2,
         })
         .setOrigin(0.5)
         .setDepth(8)
@@ -508,7 +537,7 @@ export class WorldScene extends Phaser.Scene {
     if (this.state.profile.customSkinDataUrl && this.textures.exists('custom-skin')) {
       this.player.anims.stop();
       this.player.setTexture('custom-skin');
-      this.player.setDisplaySize(32, 32);
+      this.player.setDisplaySize(ACTOR_PX, ACTOR_PX);
       return;
     }
     const look: ActorLook = {
@@ -524,7 +553,7 @@ export class WorldScene extends Phaser.Scene {
     this.player.setTexture(this.actorKey, 0);
     this.player.anims.stop();
     this.player.clearTint();
-    this.player.setDisplaySize(32, 32);
+    this.player.setDisplaySize(ACTOR_PX, ACTOR_PX);
     if (!look.pose) playActorAnim(this.player, this.actorKey, this.dir, false);
   }
 
@@ -1071,7 +1100,12 @@ export class WorldScene extends Phaser.Scene {
         neighbors,
         mind: enemy.mind,
       });
-      (enemy.body as Phaser.Physics.Arcade.Body).setVelocity(order.vx, order.vy);
+      const body = enemy.body as Phaser.Physics.Arcade.Body;
+      body.setVelocity(order.vx, order.vy);
+      const ahead = tileAt(this.world, enemy.x + Math.sign(order.vx) * 12, enemy.y + Math.sign(order.vy) * 12);
+      if (ahead && (ahead.tile === 'water' || ahead.tile === 'shore' || ahead.tile === 'lava')) {
+        body.setVelocity(0, 0);
+      }
       if (order.winding) enemy.setTint(0xffd27a);
       else if (enemy.bot.tint) enemy.setTint(enemy.bot.tint);
       else enemy.clearTint();
@@ -1127,7 +1161,12 @@ export class WorldScene extends Phaser.Scene {
         c.wanderAt = time + 1500 + Math.random() * 2500;
         const tx = c.homeX + Phaser.Math.Between(-48, 48);
         const ty = c.homeY + Phaser.Math.Between(-48, 48);
-        this.physics.moveTo(c, tx, ty, 40);
+        const dest = tileAt(this.world, tx, ty);
+        if (!dest || dest.blocked || dest.tile === 'water' || dest.tile === 'shore' || dest.tile === 'lava') {
+          (c.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
+        } else {
+          this.physics.moveTo(c, tx, ty, 36);
+        }
       }
     });
   }
@@ -2104,7 +2143,7 @@ export class WorldScene extends Phaser.Scene {
         this.time.delayedCall(100, () => {
           if (this.textures.exists('custom-skin')) {
             this.player.setTexture('custom-skin');
-            this.player.setDisplaySize(24, 32);
+            this.player.setDisplaySize(ACTOR_PX, ACTOR_PX);
             this.pushChat('Custom skin applied (local upload).');
             playSfx(this, 'levelup');
           }
@@ -2196,14 +2235,18 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private spawnJobPickups(): void {
-    // Keep flower/mushroom pickups out of Starter Area and beaches
-    for (let i = 0; i < 24; i++) {
-      const x = (8 + Math.random() * 50) * TILE;
-      const y = (8 + Math.random() * 40) * TILE;
+    let placed = 0;
+    let guard = 0;
+    while (placed < 36 && guard < 500) {
+      guard += 1;
+      const x = (4 + Math.random() * (MAP_W - 8)) * TILE;
+      const y = (4 + Math.random() * (MAP_H - 8)) * TILE;
       const cell = tileAt(this.world, x, y);
-      if (!cell || cell.tile === 'sand' || cell.zone === 'start_park' || cell.zone === 'mercy_beach') continue;
+      if (!cell || cell.blocked || cell.tile === 'sand' || cell.tile === 'water' || cell.tile === 'shore') continue;
+      if (cell.zone === 'start_park' || cell.zone === 'mercy_beach' || cell.zone === 'south_beach') continue;
       const p = this.pickups.create(x, y, 'pickup') as Phaser.Physics.Arcade.Sprite;
       p.setData('kind', Math.random() > 0.5 ? 'mushroom' : 'flower');
+      placed += 1;
     }
   }
 
