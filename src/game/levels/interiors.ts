@@ -128,6 +128,7 @@ export function themeFor(label: string, type: string): string {
   if (name.includes('skate')) return 'skate';
   if (name.includes('mine')) return 'mine';
   if (name.includes('cave')) return 'cave';
+  if (name.includes('box factory')) return 'gang';
   if (
     name.includes('gz') ||
     name.includes('bh') ||

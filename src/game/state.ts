@@ -79,6 +79,9 @@ export interface GameState {
   plasmaCoins: number;
   gangCoins: number;
   bankPaidAt: number;
+  /** Last outdoor position. Null until the player has stood on the city map. */
+  worldX: number | null;
+  worldY: number | null;
 }
 
 const JOBS: JobId[] = [
@@ -165,6 +168,8 @@ export function createInitialState(profile: PlayerProfile): GameState {
     plasmaCoins: 0,
     gangCoins: 0,
     bankPaidAt: 0,
+    worldX: null,
+    worldY: null,
     chatLog: [
       'System: Welcome to ProjectEra — you are in the Starter Area (safe plaza).',
       'System: Digging is at Mercy Beach / Southridge Beach — not here. Buy shovels at Shell Shack.',

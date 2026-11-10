@@ -1,0 +1,41 @@
+{
+  "note": "Provisional ProjectEra layout. These coordinates are not surveyed GraalOnline Era originals. Position accuracy is project-defined until a real survey exists. Base name and current owner gang are separate fields.",
+  "outdoor": {
+    "worldWidthPx": 2352,
+    "worldHeightPx": 1008,
+    "tileSizePx": 16,
+    "columns": 147,
+    "rows": 63,
+    "tileCount": 9261,
+    "levelSlices": [
+      { "x": 0, "columns": 64, "rows": 63 },
+      { "x": 64, "columns": 64, "rows": 63 },
+      { "x": 128, "columns": 19, "rows": 63 }
+    ],
+    "arrangement": "west Northridge, center channel and bridge, east Southridge"
+  },
+  "spawn": {
+    "place": "Starter Area",
+    "tile": { "x": 56, "y": 47 },
+    "pixel": { "x": 904, "y": 760 },
+    "surface": "sidewalk",
+    "noPk": true,
+    "positionStatus": "provisional"
+  },
+  "places": [
+    { "id": "start_park", "name": "Starter Area", "role": "spawn", "positionStatus": "provisional" },
+    { "id": "mercy_beach", "name": "Mercy Beach", "role": "dig-sand", "positionStatus": "provisional" },
+    { "id": "south_beach", "name": "Southridge Beach", "role": "dig-sand", "positionStatus": "provisional" },
+    { "id": "tachi", "name": "Tachi Zone", "role": "gang-base", "ownerGang": null, "positionStatus": "provisional" },
+    { "id": "blackholst", "name": "Blackholst Zone", "role": "gang-base", "ownerGang": null, "positionStatus": "provisional" },
+    { "id": "bbz", "name": "Blazian Bandits Zone", "role": "gang-base", "ownerGang": null, "positionStatus": "provisional" },
+    { "id": "mafia", "name": "Mafia Zone", "role": "gang-base", "ownerGang": null, "positionStatus": "provisional" },
+    { "id": "gz", "name": "Gangster Zone", "role": "gang-base", "ownerGang": null, "positionStatus": "provisional" },
+    { "id": "box_factory", "name": "Box Factory Zone", "role": "gang-base", "ownerGang": null, "positionStatus": "provisional" },
+    { "id": "pirate_zone", "name": "Pirate Zone", "role": "gang-base", "ownerGang": null, "positionStatus": "provisional" },
+    { "id": "guerre", "name": "Guerre Zone", "role": "gang-base", "ownerGang": null, "positionStatus": "provisional" },
+    { "id": "neo", "name": "Neo Zone", "role": "gang-base", "ownerGang": null, "positionStatus": "provisional" },
+    { "id": "lethal", "name": "Lethal", "role": "gang-base", "ownerGang": null, "positionStatus": "provisional" },
+    { "id": "bank", "name": "Era Bank", "role": "gang-base", "ownerGang": null, "positionStatus": "provisional" }
+  ]
+}

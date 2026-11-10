@@ -33,6 +33,17 @@ export function levelAt(tx: number, ty: number): MapLevel {
   };
 }
 
+/**
+ * Outdoor slices of the 147×63 raster. A logical level is 64×64,
+ * but this map is only 63 tiles tall and the last column is 19 tiles wide.
+ * Cells outside these slices are not part of the outdoor world.
+ */
+export const OUTDOOR_LEVEL_SLICES = [
+  { x: 0, w: 64, h: 63 },
+  { x: 64, w: 64, h: 63 },
+  { x: 128, w: 19, h: 63 },
+] as const;
+
 export function levelLabel(tx: number, ty: number): string {
   const level = levelAt(tx, ty);
   return `L${level.lx},${level.ly}`;

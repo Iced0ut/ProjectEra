@@ -84,9 +84,8 @@ export function thinkBot(input: {
   const pDist = Math.hypot(input.px - input.x, input.py - input.y);
   const facing = facingOf(input.px - input.x, input.py - input.y);
   const hurt = input.maxHp > 0 && input.hp / input.maxHp <= style.retreatHp && style.retreatHp > 0;
-  const alert = input.time < mind.alertUntil;
   const notice = Math.min(input.aggro, style.leash + 20);
-  const safeBlocks = input.playerInSafe && input.kind === 'police_bot' && !alert;
+  const safeBlocks = input.playerInSafe;
   const seesPlayer = pDist < notice && homeDist < style.leash + 24 && !safeBlocks;
 
   if (mind.windupUntil > input.time) {

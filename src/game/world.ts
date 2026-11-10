@@ -21,6 +21,8 @@ export type ZoneId = DistrictId | 'wilderness';
 export interface WorldCell {
   tile: TileKind;
   blocked: boolean;
+  /** Sand mask for Mercy Beach and Southridge Beach only. Not inferred from pixel color. */
+  dig: boolean;
   zone: ZoneId;
   noPk: boolean;
   region: 'northridge' | 'southridge' | 'channel';
@@ -31,6 +33,9 @@ export interface WorldObjectSpec {
   x: number;
   y: number;
   label?: string;
+  /** Wall footprint in pixels. The roof image may be larger and must not collide. */
+  footprintW?: number;
+  footprintH?: number;
 }
 
 export interface JobStation {
@@ -78,6 +83,7 @@ function fillRect(
         blocked: !!opts.blocked,
         zone,
         noPk: !!opts.noPk,
+        dig: false,
         region,
       };
     }
@@ -107,7 +113,7 @@ export function createWorld(): WorldData {
     for (let x = 0; x < MAP_W; x++) {
       const region = x >= 112 ? 'southridge' : x >= 96 ? 'channel' : 'northridge';
       // Default: ocean everywhere, then stamp landmasses
-      cells[y][x] = { tile: 'water', blocked: true, zone: 'wilderness', noPk: true, region };
+      cells[y][x] = { tile: 'water', blocked: true, dig: false, zone: 'wilderness', noPk: true, region };
     }
   }
 
@@ -117,6 +123,9 @@ export function createWorld(): WorldData {
   fillRect(cells, 96, 0, 16, MAP_H, 'water', 'bridge', { blocked: true, noPk: true, region: 'channel' });
   fillRect(cells, 98, 24, 12, 14, 'bridge', 'bridge', { noPk: true, region: 'channel' });
   fillRect(cells, 100, 26, 8, 10, 'road', 'bridge', { noPk: true, region: 'channel' });
+  // Railings stay blocked. Only the deck clears the water collision.
+  fillRect(cells, 98, 24, 2, 14, 'bridge', 'bridge', { blocked: true, noPk: true, region: 'channel' });
+  fillRect(cells, 108, 24, 2, 14, 'bridge', 'bridge', { blocked: true, noPk: true, region: 'channel' });
   fillRect(cells, 90, 28, 8, 6, 'road', 'harbour', { noPk: true, region: 'northridge' });
   fillRect(cells, 110, 28, 8, 6, 'road', 'southridge', { noPk: true, region: 'southridge' });
 
@@ -161,6 +170,17 @@ export function createWorld(): WorldData {
   paintDistrict(cells, 'south_beach', 'sand');
   paintDistrict(cells, 'cave_coast', 'path');
 
+  // Dig mask is data, not a color sample. Only sand inside the two beach zones.
+  for (let y = 0; y < MAP_H; y++) {
+    for (let x = 0; x < MAP_W; x++) {
+      const cell = cells[y][x];
+      cell.dig =
+        !cell.blocked &&
+        cell.tile === 'sand' &&
+        (cell.zone === 'mercy_beach' || cell.zone === 'south_beach');
+    }
+  }
+
   const objects: WorldObjectSpec[] = [];
   const addBuilding = (tx: number, ty: number, type: WorldObjectSpec['type'], label: string) => {
     objects.push({ type, x: tx * TILE, y: ty * TILE, label });
@@ -175,7 +195,8 @@ export function createWorld(): WorldData {
   addBuilding(58, 48, 'building', 'FoodMart');
   addBuilding(42, 44, 'building', 'Police Station');
   addBuilding(6, 44, 'building', 'Auction House');
-  addBuilding(72, 57, 'building', 'City Bank');
+  addBuilding(72, 57, 'building', 'Era Bank');
+  addBuilding(42, 6, 'building', 'Box Factory Zone');
   addBuilding(6, 56, 'building', 'Mercy West');
   addBuilding(74, 51, 'building', 'Mercy East');
   addBuilding(68, 30, 'building', 'Event House');
@@ -232,7 +253,8 @@ export function createWorld(): WorldData {
     cells,
     objects,
     labels,
-    spawn: { x: 54 * TILE, y: 46 * TILE },
+    // Provisional project coordinate inside the Starter Area sidewalk. Not a surveyed Era spawn.
+    spawn: { x: 56 * TILE + 8, y: 47 * TILE + 8 },
     mailDrop: { x: 58 * TILE, y: 46 * TILE },
     pizzaStation: { x: 50 * TILE, y: 48 * TILE },
     warpPads: [
@@ -251,6 +273,19 @@ export function createWorld(): WorldData {
       { id: 'garage', job: 'cars', x: 74 * TILE, y: 44 * TILE, label: 'Assembly bay' },
     ],
   };
+}
+
+export function isRestorablePosition(world: WorldData, wx: number, wy: number): boolean {
+  const cell = tileAt(world, wx, wy);
+  return !!cell && !cell.blocked;
+}
+
+/** Saved outdoor coordinates, or the Starter Area. Never a beach fallback. */
+export function resolveStart(world: WorldData, wx?: number | null, wy?: number | null): { x: number; y: number } {
+  if (typeof wx === 'number' && typeof wy === 'number' && isRestorablePosition(world, wx, wy)) {
+    return { x: wx, y: wy };
+  }
+  return world.spawn;
 }
 
 export function tileAt(world: WorldData, wx: number, wy: number): WorldCell | null {

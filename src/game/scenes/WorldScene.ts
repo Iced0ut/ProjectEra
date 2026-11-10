@@ -5,6 +5,8 @@ import {
   DASH_SPEED,
   DIR_VEC,
   MAP_H,
+  MAP_PX_H,
+  MAP_PX_W,
   MAP_W,
   PLAYER_SPEED,
   TILE,
@@ -65,7 +67,7 @@ import {
   type GameState,
   type JobId,
 } from '../state';
-import { createWorld, districtNameAt, tileAt, type JobStation, type WorldData } from '../world';
+import { createWorld, districtNameAt, resolveStart, tileAt, type JobStation, type WorldData } from '../world';
 import { playMusic, playSfx } from '../audio';
 import { DISTRICTS } from '../content/districts';
 import { actorKeyFor, paintActorSheet, playActorAnim, type ActorLook } from '../sprites/characters';
@@ -151,7 +153,8 @@ export class WorldScene extends Phaser.Scene {
     for (const obj of this.world.objects) {
       // Bottom is the ground texture. Middle holds walls and trunks. Top is roofs and canopies.
       if (obj.type === 'tree') {
-        this.add.image(obj.x + TILE, obj.y + TILE + 8, 'trunk').setDepth(obj.y).setDisplaySize(14, 16);
+        const trunk = this.solids.create(obj.x + TILE, obj.y + TILE + 10, 'trunk') as Phaser.Physics.Arcade.Sprite;
+        trunk.setDepth(obj.y).setDisplaySize(12, 14).setSize(8, 8).setOffset(2, 4);
         this.add.image(obj.x + TILE, obj.y + 2, 'canopy').setDepth(120000).setDisplaySize(36, 22);
         continue;
       }
@@ -159,12 +162,12 @@ export class WorldScene extends Phaser.Scene {
         this.add.image(obj.x + TILE, obj.y + TILE, obj.type).setDepth(obj.y);
         continue;
       }
-      const sprite = this.solids.create(obj.x + TILE, obj.y + TILE + 6, obj.type) as Phaser.Physics.Arcade.Sprite;
-      sprite.setDepth(obj.y + 8);
-      sprite.setDisplaySize(obj.type === 'house' ? 36 : 48, obj.type === 'shop' ? 22 : 26);
-      sprite.setSize(30, 12).setOffset(6, 12);
-      const roof = this.add.image(obj.x + TILE, obj.y + 2, 'roof').setDepth(120000);
-      roof.setDisplaySize(obj.type === 'house' ? 40 : 54, 16);
+      const sprite = this.solids.create(obj.x + TILE, obj.y + TILE + 10, obj.type) as Phaser.Physics.Arcade.Sprite;
+      sprite.setDepth(obj.y + 10);
+      sprite.setDisplaySize(obj.footprintW ?? 28, obj.footprintH ?? 16);
+      sprite.setSize(18, 10).setOffset(5, 4);
+      const roof = this.add.image(obj.x + TILE, obj.y, 'roof').setDepth(120000);
+      roof.setDisplaySize((obj.footprintW ?? 28) + 16, 14);
       const doorX = obj.x + TILE;
       const doorY = obj.y + TILE + 28;
       const kind = interiorKindFor(obj.label ?? 'Building', obj.type);
@@ -177,7 +180,8 @@ export class WorldScene extends Phaser.Scene {
     }
     this.events.once('shutdown', () => saveGame(this.state));
 
-    this.player = this.physics.add.sprite(this.world.spawn.x, this.world.spawn.y, 'player');
+    const start = resolveStart(this.world, this.state.worldX, this.state.worldY);
+    this.player = this.physics.add.sprite(start.x, start.y, 'player');
     this.player.setCollideWorldBounds(true);
     this.player.setDepth(1000);
     this.player.setSize(14, 10).setOffset(9, 18);
@@ -259,6 +263,10 @@ export class WorldScene extends Phaser.Scene {
     this.saveTick += delta;
     if (this.saveTick >= 5000) {
       this.saveTick = 0;
+      if (!this.inside) {
+        this.state.worldX = this.player.x;
+        this.state.worldY = this.player.y;
+      }
       saveGame(this.state);
     }
     this.hudTick += delta;
@@ -384,11 +392,11 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private drawTiles(): void {
-    // One CPU canvas, then a single texture. Stamping every tile on the GPU
-    // stalls software WebGL and leaves the city on the loading screen.
+    // One 2352×1008 ground canvas. Built once. Not refreshed per tile or per frame.
+    const started = performance.now();
     const canvas = document.createElement('canvas');
-    canvas.width = MAP_W * TILE;
-    canvas.height = MAP_H * TILE;
+    canvas.width = MAP_PX_W;
+    canvas.height = MAP_PX_H;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     ctx.imageSmoothingEnabled = false;
@@ -412,8 +420,12 @@ export class WorldScene extends Phaser.Scene {
       }
     }
     if (this.textures.exists('world-ground')) this.textures.remove('world-ground');
-    this.textures.addCanvas('world-ground', canvas);
+    const texture = this.textures.addCanvas('world-ground', canvas);
+    texture?.setFilter(Phaser.Textures.FilterMode.NEAREST);
     this.add.image(0, 0, 'world-ground').setOrigin(0, 0).setDepth(0);
+    console.info(
+      `[projectera] ground ${canvas.width}x${canvas.height} tiles=${MAP_W * MAP_H} buildMs=${(performance.now() - started).toFixed(1)}`,
+    );
   }
 
   private drawDistrictLabels(): void {
@@ -943,6 +955,11 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private botShotHit(shot: Phaser.Physics.Arcade.Sprite): void {
+    const here = tileAt(this.world, this.player.x, this.player.y);
+    if (!this.inside && here?.noPk) {
+      shot.destroy();
+      return;
+    }
     const ownerId = shot.getData('owner') as string;
     const owner = this.bots.getChildren().find((obj) => (obj as BotSprite).bot.id === ownerId) as BotSprite | undefined;
     const damage = (shot.getData('damage') as number) || 4;
@@ -980,9 +997,19 @@ export class WorldScene extends Phaser.Scene {
 
   private hurtPlayer(enemy: BotSprite, amount: number, time: number): void {
     if (!enemy.active || enemy.hp <= 0 || amount <= 0) return;
-    const cell = tileAt(this.world, this.player.x, this.player.y);
-    const alert = time < enemy.mind.alertUntil;
-    if (cell?.noPk && enemy.bot.kind !== 'beach_crab' && !alert) return;
+    const cell = this.inside ? this.footCell(this.player.x, this.player.y) : tileAt(this.world, this.player.x, this.player.y);
+    if (!this.inside && cell?.noPk) return;
+    if (enemy.bot.kind === 'beach_crab') {
+      const nextHit = (enemy.getData('nextCrabHit') as number) || 0;
+      if (time < nextHit) return;
+      enemy.setData('nextCrabHit', time + 700);
+      this.state.hp -= 3;
+      this.floatHit(this.player.x, this.player.y - 16, '3', '#ff8a6a');
+      playSfx(this, 'hurt');
+      this.cameras.main.shake(70, 0.003);
+      if (this.state.hp <= 0) this.respawn();
+      return;
+    }
     if (time < (this.player.getData('iframes') as number)) return;
     this.player.setData('iframes', time + 480);
     let dmg = amount;
@@ -1155,7 +1182,7 @@ export class WorldScene extends Phaser.Scene {
     if (npc) return `E — ${npc.name} (${npc.role})`;
     const cell = tileAt(this.world, this.player.x, this.player.y);
     if (!cell) return '';
-    if (cell.tile === 'sand' || cell.zone === 'mercy_beach' || cell.zone === 'south_beach') {
+    if (cell.dig && (cell.zone === 'mercy_beach' || cell.zone === 'south_beach')) {
       if (!this.state.shovelCount && this.state.shovelUses <= 0) {
         return 'Buy a shovel at Shell Shack (50g) — Mercy Beach or Southridge';
       }
@@ -1228,7 +1255,7 @@ export class WorldScene extends Phaser.Scene {
     if (this.tryWarpPad()) return;
     const cell = tileAt(this.world, this.player.x, this.player.y);
     if (!cell) return;
-    if (cell.tile === 'sand' || cell.zone === 'mercy_beach' || cell.zone === 'south_beach') this.digBeach();
+    if (cell.dig) this.digBeach();
     else if (cell.zone === 'south_mines' || cell.zone === 'gun_row') this.doRandomJob();
     else if (cell.zone === 'start_park' || cell.zone === 'downtown') {
       /* plaza - no default job */
@@ -1593,9 +1620,16 @@ export class WorldScene extends Phaser.Scene {
       return;
     }
 
-    const cell = tileAt(this.world, this.player.x, this.player.y);
-    if (!cell || (cell.tile !== 'sand' && cell.zone !== 'mercy_beach' && cell.zone !== 'south_beach')) {
-      this.pushChat('Dig on beach sand only (Mercy Beach or Southridge Beach).');
+    if (this.inside) {
+      this.pushChat('Dig only on Mercy Beach or Southridge Beach.');
+      return;
+    }
+    const aim = DIR_VEC[this.dir];
+    const cell = tileAt(this.world, this.player.x + aim.x * 14, this.player.y + aim.y * 14);
+    const here = tileAt(this.world, this.player.x, this.player.y);
+    const target = cell?.dig ? cell : here?.dig ? here : null;
+    if (!target?.dig) {
+      this.pushChat('Dig only on the sand masks of Mercy Beach and Southridge Beach.');
       return;
     }
 
@@ -1684,8 +1718,11 @@ export class WorldScene extends Phaser.Scene {
       loot: 2,
       tint: 0xff6b4a,
     };
+    const land = tileAt(this.world, this.player.x + 16, this.player.y);
+    const spot = land?.dig ? { x: this.player.x + 16, y: this.player.y } : { x: this.player.x, y: this.player.y };
+    if (!tileAt(this.world, spot.x, spot.y)?.dig) return;
     const spr = this.createBotSprite(bot);
-    spr.setPosition(this.player.x + 20, this.player.y);
+    spr.setPosition(spot.x, spot.y);
     playSfx(this, 'hurt');
     this.pushChat('A crab burst from the sand! (3 dmg — kill it for a crab shell)');
   }

@@ -15,7 +15,10 @@ export interface CrabShellDef {
   tint: number;
 }
 
-/** Common beach shells — Trochus is the most common, matching Era shelling guides. */
+/**
+ * Test loot table, not published Era drop rates.
+ * Trochus weight is higher than every other single shell.
+ */
 export const SHELLS: ShellDef[] = [
   { id: 'trochus', name: 'Trochus', sellPrice: 3, weight: 40, tint: 0xe8d5b7 },
   { id: 'aerolata', name: 'Aerolata', sellPrice: 3, weight: 22, tint: 0xc4b49a },
