@@ -1,3 +1,5 @@
+import { WEAPONS } from './content/weapons';
+
 export type JobId =
   | 'fishing'
   | 'mining'
@@ -6,63 +8,8 @@ export type JobId =
   | 'pizza'
   | 'mushrooms'
   | 'flowers'
-  | 'mail';
-
-export type WeaponId = 'bat' | 'knife' | 'pistol' | 'smg';
-
-export interface WeaponDef {
-  id: WeaponId;
-  name: string;
-  kind: 'melee' | 'gun';
-  damage: number;
-  range: number;
-  cooldown: number;
-  ability: string;
-  cost: number;
-}
-
-export const WEAPONS: Record<WeaponId, WeaponDef> = {
-  bat: {
-    id: 'bat',
-    name: 'Street Bat',
-    kind: 'melee',
-    damage: 8,
-    range: 42,
-    cooldown: 280,
-    ability: 'Dash',
-    cost: 0,
-  },
-  knife: {
-    id: 'knife',
-    name: 'Hunter Knife',
-    kind: 'melee',
-    damage: 10,
-    range: 38,
-    cooldown: 220,
-    ability: 'Roll',
-    cost: 120,
-  },
-  pistol: {
-    id: 'pistol',
-    name: 'City Pistol',
-    kind: 'gun',
-    damage: 9,
-    range: 220,
-    cooldown: 320,
-    ability: 'Reload Burst',
-    cost: 250,
-  },
-  smg: {
-    id: 'smg',
-    name: 'Rapid SMG',
-    kind: 'gun',
-    damage: 6,
-    range: 200,
-    cooldown: 120,
-    ability: 'Spray',
-    cost: 480,
-  },
-};
+  | 'mail'
+  | 'cars';
 
 export interface InventoryItem {
   id: string;
@@ -76,6 +23,15 @@ export interface PlayerProfile {
   shirt: number;
   pants: number;
   hat: number;
+  customSkinDataUrl?: string;
+}
+
+export interface AmmoPools {
+  handgun: number;
+  rifle: number;
+  smg: number;
+  shotgun: number;
+  special: number;
 }
 
 export interface GameState {
@@ -83,8 +39,10 @@ export interface GameState {
   hp: number;
   maxHp: number;
   gralats: number;
-  weapon: WeaponId;
-  ownedWeapons: WeaponId[];
+  weapon: string;
+  ownedWeapons: string[];
+  ammo: AmmoPools;
+  clipLeft: number;
   inventory: InventoryItem[];
   kills: number;
   jobXp: Record<JobId, number>;
@@ -93,6 +51,19 @@ export interface GameState {
   gangRank: string;
   houseOwned: boolean;
   furniture: string[];
+  ownedHats: string[];
+  ownedOutfits: string[];
+  ownedMounts: string[];
+  ownedCars: string[];
+  ownedMorphs: string[];
+  activeMount: string | null;
+  activeCar: string | null;
+  activeMorph: string | null;
+  equippedHat: string;
+  shieldUntil: number;
+  speedBoostUntil: number;
+  abilityReadyAt: number;
+  altHealMode: boolean;
   achievements: string[];
   chatLog: string[];
 }
@@ -106,6 +77,7 @@ const JOBS: JobId[] = [
   'mushrooms',
   'flowers',
   'mail',
+  'cars',
 ];
 
 export function createInitialState(profile: PlayerProfile): GameState {
@@ -115,11 +87,13 @@ export function createInitialState(profile: PlayerProfile): GameState {
     profile,
     hp: 50,
     maxHp: 50,
-    gralats: 100,
-    weapon: 'bat',
-    ownedWeapons: ['bat'],
+    gralats: 2500,
+    weapon: 'street_bat',
+    ownedWeapons: ['street_bat', 'starter_knife', 'city_pistol'],
+    ammo: { handgun: 120, rifle: 90, smg: 120, shotgun: 40, special: 30 },
+    clipLeft: WEAPONS.city_pistol.clip ?? 0,
     inventory: [
-      { id: 'food', name: 'Street Snack', count: 3 },
+      { id: 'food', name: 'Street Snack', count: 5 },
       { id: 'shell', name: 'Shell', count: 0 },
       { id: 'ore', name: 'Ore', count: 0 },
       { id: 'fish', name: 'Fish', count: 0 },
@@ -128,6 +102,8 @@ export function createInitialState(profile: PlayerProfile): GameState {
       { id: 'flower', name: 'Flower', count: 0 },
       { id: 'pizza', name: 'Pizza Box', count: 0 },
       { id: 'mail', name: 'Mail Bundle', count: 0 },
+      { id: 'petrol_bomb', name: 'Petrol Bomb', count: 2 },
+      { id: 'smoke_grenade', name: 'Smoke Grenade', count: 2 },
     ],
     kills: 0,
     jobXp,
@@ -136,17 +112,36 @@ export function createInitialState(profile: PlayerProfile): GameState {
     gangRank: 'Recruit',
     houseOwned: false,
     furniture: [],
+    ownedHats: ['none', 'cap', 'beanie', 'crown'],
+    ownedOutfits: ['starter', 'street', 'formal'],
+    ownedMounts: [],
+    ownedCars: [],
+    ownedMorphs: ['none'],
+    activeMount: null,
+    activeCar: null,
+    activeMorph: null,
+    equippedHat: 'none',
+    shieldUntil: 0,
+    speedBoostUntil: 0,
+    abilityReadyAt: 0,
+    altHealMode: false,
     achievements: [],
     chatLog: [
-      'System: Welcome to ProjectEra — an original city action sandbox.',
-      'System: Jobs, spars, gangs, and houses are online in this demo district.',
+      'System: Welcome to ProjectEra — original city sandbox inspired by Era systems.',
+      'System: Full weapon catalog with burn/poison/shock/slow/stun/lifesteal/knockback/heal/explode.',
+      'System: City is populated with NPCs, citizens, spar bots, rivals, crabs, and enforcers.',
     ],
   };
+}
+
+export function currentWeapon(state: GameState) {
+  return WEAPONS[state.weapon] ?? WEAPONS.street_bat;
 }
 
 export function addItem(state: GameState, id: string, amount = 1): void {
   const item = state.inventory.find((i) => i.id === id);
   if (item) item.count += amount;
+  else state.inventory.push({ id, name: id, count: amount });
 }
 
 export function consumeItem(state: GameState, id: string, amount = 1): boolean {
@@ -171,4 +166,14 @@ export function unlockAchievement(state: GameState, id: string, label: string): 
   if (state.achievements.includes(id)) return null;
   state.achievements.push(id);
   return `Achievement: ${label}`;
+}
+
+export function equipWeapon(state: GameState, id: string): string {
+  const def = WEAPONS[id];
+  if (!def) return 'Unknown weapon.';
+  if (!state.ownedWeapons.includes(id)) return 'You do not own that weapon.';
+  state.weapon = id;
+  state.clipLeft = def.clip ?? 0;
+  state.altHealMode = false;
+  return `Equipped ${def.name} · ${def.abilityLabel} · effect ${def.effect}`;
 }

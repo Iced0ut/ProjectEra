@@ -96,11 +96,18 @@ export class TitleScene extends Phaser.Scene {
       this.scene.launch('hud', { state });
     });
 
-    this.add
-      .text(width / 2, height * 0.9, 'Desktop builds: Windows .exe + macOS app via Electron', {
+      this.add
+      .text(width / 2, height * 0.86, 'Guns · Melees · Effects · NPCs · Bots · Shops · Rides · Skins', {
         fontFamily: 'VT323, monospace',
         fontSize: '22px',
         color: '#8aa0c0',
+      })
+      .setOrigin(0.5);
+    this.add
+      .text(width / 2, height * 0.92, 'Desktop: npm run dist:win · npm run dist:mac', {
+        fontFamily: 'VT323, monospace',
+        fontSize: '20px',
+        color: '#6a8098',
       })
       .setOrigin(0.5);
   }
