@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>ProjectEra</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@400;600;700&family=Sora:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <div id="app">
+      <div id="game-shell">
+        <div id="game-root"></div>
+        <div id="overlay-ui">
+          <!-- Title overlay -->
+          <section id="title-ui" class="title-ui hidden" aria-label="Title screen">
+            <div class="title-card">
+              <p class="eyebrow">Original city sandbox</p>
+              <h1>ProjectEra</h1>
+              <p class="tagline">Spawn at Starter Area · Northridge · Southridge</p>
+              <div class="name-row">
+                <label for="player-name">Name</label>
+                <input id="player-name" maxlength="16" value="Player" autocomplete="off" />
+              </div>
+              <div class="look-grid" id="look-grid">
+                <button type="button" data-look="hair">Hair <span>0</span></button>
+                <button type="button" data-look="shirt">Shirt <span>0</span></button>
+                <button type="button" data-look="pants">Pants <span>0</span></button>
+                <button type="button" data-look="hat">Hat <span>0</span></button>
+              </div>
+              <button type="button" id="enter-city" class="cta">Enter City</button>
+              <p class="hint-line">WASD move · Space attack · Q ability · E interact · I inventory</p>
+            </div>
+          </section>
+
+          <!-- In-game HUD -->
+          <section id="play-ui" class="play-ui hidden" aria-label="Game HUD">
+            <div class="hud-top">
+              <div class="hud-stack">
+                <div class="stat-chip region" id="hud-region">Northridge</div>
+                <div class="hp-card">
+                  <div class="hp-meta">
+                    <span>HP</span>
+                    <strong id="hud-hp-text">50/50</strong>
+                  </div>
+                  <div class="hp-track"><div id="hud-hp-fill" class="hp-fill"></div></div>
+                </div>
+                <div class="stat-row">
+                  <div class="stat-chip gold" id="hud-money">0 g</div>
+                  <div class="stat-chip" id="hud-kills">0 kills</div>
+                </div>
+              </div>
+              <div class="hud-stack right">
+                <div class="weapon-card">
+                  <div class="weapon-name" id="hud-weapon">Street Bat</div>
+                  <div class="weapon-sub" id="hud-effect">Knockback · Dash</div>
+                  <div class="weapon-ammo" id="hud-ammo">Melee</div>
+                </div>
+                <div class="stat-chip" id="hud-ride">On foot</div>
+              </div>
+            </div>
+
+            <div class="hud-bottom">
+              <div class="chat-card" id="hud-chat"></div>
+              <div class="hint-card" id="hud-hint">Explore Start Park</div>
+            </div>
+
+            <aside id="inv-panel" class="inv-panel hidden">
+              <header>
+                <h2>Loadout</h2>
+                <span id="inv-count">0 weapons</span>
+              </header>
+              <pre id="inv-body"></pre>
+            </aside>
+          </section>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
